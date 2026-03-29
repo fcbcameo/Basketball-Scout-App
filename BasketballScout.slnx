@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BasketballScout.App/BasketballScout.App.csproj" />
+    <Project Path="src/BasketballScout.Core/BasketballScout.Core.csproj" />
+    <Project Path="src/BasketballScout.Data/BasketballScout.Data.csproj" />
+    <Project Path="src/BasketballScout.Services/BasketballScout.Services.csproj" />
+  </Folder>
+</Solution>
