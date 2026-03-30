@@ -21,32 +21,120 @@ public partial class GameScoringPage : ContentPage
         // Render shot dots when collection changes
         _vm.ShotChartDots.CollectionChanged += (_, _) => RenderShotDots();
 
-        // Update follow-up popup contents when follow-up state changes
+        // React to VM property changes
         _vm.PropertyChanged += OnVmPropertyChanged;
-
-        // Update player card highlighting when selection changes
-        _vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(GameScoringViewModel.SelectedPlayer))
-                UpdateCourtHint();
-        };
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(GameScoringViewModel.FollowUp))
+        switch (e.PropertyName)
         {
-            RebuildFollowUpButtons();
-            // Update label
-            if (_vm.FollowUp is not null)
-                FollowUpLabel.Text = _vm.FollowUp.Type == "assist" ? "ASSISTED BY?" : "REBOUND BY?";
-        }
+            case nameof(GameScoringViewModel.FollowUp):
+                RebuildFollowUpButtons();
+                if (_vm.FollowUp is not null)
+                {
+                    FollowUpLabel.Text = _vm.FollowUp.Type == "assist" ? "ASSISTED BY?" : "REBOUND BY?";
+                    FollowUpPopup.Stroke = _vm.FollowUp.Type == "assist"
+                        ? Color.FromArgb("#4ade8033") : Color.FromArgb("#fbbf2433");
+                    FollowUpPopup.BackgroundColor = _vm.FollowUp.Type == "assist"
+                        ? Color.FromArgb("#121a12") : Color.FromArgb("#1a1a12");
+                }
+                UpdateOverlayInputTransparent();
+                break;
 
-        if (e.PropertyName == nameof(GameScoringViewModel.PendingShot) && _vm.PendingShot is not null)
+            case nameof(GameScoringViewModel.PendingShot):
+                if (_vm.PendingShot is not null)
+                {
+                    ZoneLabel.Text = _vm.PendingShot.IsSuggested3Pt ? "3PT ZONE" : "2PT ZONE";
+                    ZoneLabel.TextColor = _vm.PendingShot.IsSuggested3Pt
+                        ? Color.FromArgb("#fbbf24") : Color.FromArgb("#60a5fa");
+                }
+                UpdateOverlayInputTransparent();
+                break;
+
+            case nameof(GameScoringViewModel.SelectedPlayer):
+                UpdatePlayerHighlighting();
+                UpdateCourtHint();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// When a popup is showing, make the court overlay pass-through so
+    /// the popup buttons (and stat bar) can receive taps.
+    /// </summary>
+    private void UpdateOverlayInputTransparent()
+    {
+        CourtOverlay.InputTransparent = _vm.PendingShot is not null || _vm.FollowUp is not null;
+    }
+
+    /// <summary>
+    /// Walk every player card Border in the 4 panels and highlight
+    /// the one matching SelectedPlayer with the team color.
+    /// </summary>
+    private void UpdatePlayerHighlighting()
+    {
+        var selectedId = _vm.SelectedPlayer?.Id;
+        bool isHome = _vm.IsHomeSelected;
+
+        HighlightPanel(HomeOnCourtPanel, selectedId, _vm.HomeTeamColor, isActive: true);
+        HighlightPanel(HomeBenchPanel, selectedId, _vm.HomeTeamColor, isActive: false);
+        HighlightPanel(AwayOnCourtPanel, selectedId, _vm.AwayTeamColor, isActive: true);
+        HighlightPanel(AwayBenchPanel, selectedId, _vm.AwayTeamColor, isActive: false);
+    }
+
+    private static void HighlightPanel(Layout panel, int? selectedId, string teamColorHex, bool isActive)
+    {
+        var teamColor = Color.FromArgb(teamColorHex);
+
+        foreach (var child in panel.Children)
         {
-            ZoneLabel.Text = _vm.PendingShot.IsSuggested3Pt ? "3PT ZONE" : "2PT ZONE";
-            ZoneLabel.TextColor = _vm.PendingShot.IsSuggested3Pt
-                ? Color.FromArgb("#fbbf24") : Color.FromArgb("#60a5fa");
+            if (child is not Border border) continue;
+            var player = border.BindingContext as Player;
+            bool isSelected = player is not null && player.Id == selectedId;
+
+            if (isSelected)
+            {
+                border.BackgroundColor = teamColor;
+                border.Stroke = teamColor;
+
+                // Set text white for selected card
+                SetCardTextColors(border, Colors.White, Colors.White, Color.FromArgb("#ffffffaa"));
+            }
+            else
+            {
+                border.BackgroundColor = Color.FromArgb("#141414");
+                border.Stroke = Color.FromArgb("#1a1a1a");
+
+                // Restore default colors based on active/bench
+                var numColor = Color.FromArgb(isActive ? "#bbb" : "#444");
+                var nameColor = Color.FromArgb(isActive ? "#bbb" : "#555");
+                var posColor = Color.FromArgb(isActive ? "#444" : "#333");
+                SetCardTextColors(border, numColor, nameColor, posColor);
+            }
+        }
+    }
+
+    private static void SetCardTextColors(Border border, Color numColor, Color nameColor, Color posColor)
+    {
+        if (border.Content is not HorizontalStackLayout hsl) return;
+
+        foreach (var item in hsl.Children)
+        {
+            if (item is Label numLabel && numLabel.FontSize >= 18)
+            {
+                numLabel.TextColor = numColor;
+            }
+            else if (item is VerticalStackLayout vsl)
+            {
+                foreach (var sub in vsl.Children)
+                {
+                    if (sub is Label lbl)
+                    {
+                        lbl.TextColor = lbl.FontSize >= 9 ? nameColor : posColor;
+                    }
+                }
+            }
         }
     }
 
@@ -73,8 +161,6 @@ public partial class GameScoringPage : ContentPage
         float y = Math.Clamp((float)(position.Value.Y / courtHeight), 0f, 1f);
 
         // 3PT detection matching the JSX mockup logic
-        // Court is oriented with basket at bottom (y≈0.95), half-court at top (y≈0.02)
-        // Convert to the mockup's coordinate system (basket at bottom = high y%)
         double xPct = x * 100;
         double yPct = y * 100;
         double dx = xPct - 50;
@@ -92,7 +178,6 @@ public partial class GameScoringPage : ContentPage
 
     private void RenderShotDots()
     {
-        // Remove existing shot dots
         var dotsToRemove = CourtOverlay.Children
             .OfType<Border>()
             .Where(b => b.ClassId == "ShotDot")
@@ -127,7 +212,6 @@ public partial class GameScoringPage : ContentPage
                 }
             };
 
-            // Position proportionally, offset by half the dot size
             AbsoluteLayout.SetLayoutBounds(dot, new Rect(shot.X, shot.Y,
                 AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
             AbsoluteLayout.SetLayoutFlags(dot, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.PositionProportional);
@@ -147,6 +231,7 @@ public partial class GameScoringPage : ContentPage
         {
             if (p.Id == _vm.SelectedPlayer?.Id) continue;
 
+            var player = p;
             var btn = new Button
             {
                 Text = $"#{p.JerseyNumber}",
@@ -162,7 +247,6 @@ public partial class GameScoringPage : ContentPage
                 HeightRequest = 34,
                 MinimumHeightRequest = 34,
             };
-            var player = p; // capture for lambda
             btn.Clicked += (_, _) => _vm.HandleFollowUpCommand.Execute(player);
             FollowUpPlayersContainer.Children.Add(btn);
         }
