@@ -11,6 +11,9 @@
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
+            <converters:NotNullToBoolConverter x:Key="NotNullToBoolConverter" />
+            <converters:BoolToColorConverter x:Key="MadeColorConverter" TrueColor="#4caf50" FalseColor="#f44336" />
+            <converters:StringEqualConverter x:Key="StringEqualConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

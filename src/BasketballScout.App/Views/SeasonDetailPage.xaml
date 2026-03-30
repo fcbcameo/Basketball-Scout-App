@@ -45,6 +45,17 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Start Game Button -->
+            <Button Text="Start Game"
+                    Command="{Binding StartGameCommand}"
+                    BackgroundColor="#4caf50"
+                    TextColor="White"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    CornerRadius="10"
+                    HeightRequest="50"
+                    IsVisible="{Binding IsExistingSeason}" />
+
             <!-- Teams Section -->
             <Border Padding="16"
                     BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
