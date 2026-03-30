@@ -30,7 +30,6 @@ public partial class GameScoringPage : ContentPage
         switch (e.PropertyName)
         {
             case nameof(GameScoringViewModel.FollowUp):
-                RebuildFollowUpButtons();
                 if (_vm.FollowUp is not null)
                 {
                     FollowUpLabel.Text = _vm.FollowUp.Type == "assist" ? "ASSISTED BY?" : "REBOUND BY?";
@@ -219,37 +218,6 @@ public partial class GameScoringPage : ContentPage
         }
 
         UpdateCourtHint();
-    }
-
-    private void RebuildFollowUpButtons()
-    {
-        FollowUpPlayersContainer.Children.Clear();
-        if (_vm.FollowUp is null) return;
-
-        var onCourt = _vm.CurrentOnCourt;
-        foreach (var p in onCourt)
-        {
-            if (p.Id == _vm.SelectedPlayer?.Id) continue;
-
-            var player = p;
-            var btn = new Button
-            {
-                Text = $"#{p.JerseyNumber}",
-                FontSize = 12,
-                FontAttributes = FontAttributes.Bold,
-                BackgroundColor = Color.FromArgb("#1e1e1e"),
-                TextColor = Color.FromArgb("#ccc"),
-                BorderColor = Color.FromArgb("#333"),
-                BorderWidth = 1,
-                CornerRadius = 5,
-                Padding = new Thickness(10, 6),
-                Margin = new Thickness(0, 0, 3, 3),
-                HeightRequest = 34,
-                MinimumHeightRequest = 34,
-            };
-            btn.Clicked += (_, _) => _vm.HandleFollowUpCommand.Execute(player);
-            FollowUpPlayersContainer.Children.Add(btn);
-        }
     }
 
     // ── Shot confirmation handlers ──
