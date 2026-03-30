@@ -38,4 +38,31 @@ public partial class SeasonOverviewViewModel : ObservableObject
             IsLoading = false;
         }
     }
+
+    [RelayCommand]
+    private async Task AddSeasonAsync()
+    {
+        await Shell.Current.GoToAsync(nameof(Views.SeasonDetailPage));
+    }
+
+    [RelayCommand]
+    private async Task SelectSeasonAsync(Season season)
+    {
+        await Shell.Current.GoToAsync($"{nameof(Views.SeasonDetailPage)}?seasonId={season.Id}");
+    }
+
+    [RelayCommand]
+    private async Task DeleteSeasonAsync(Season season)
+    {
+        bool confirm = await Shell.Current.DisplayAlertAsync(
+            "Delete Season",
+            $"Delete \"{season.Name}\" and all its teams and games?",
+            "Delete", "Cancel");
+
+        if (confirm)
+        {
+            await _seasonRepository.DeleteAsync(season.Id);
+            Seasons.Remove(season);
+        }
+    }
 }

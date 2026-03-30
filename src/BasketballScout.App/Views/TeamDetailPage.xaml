@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:models="clr-namespace:BasketballScout.Core.Models;assembly=BasketballScout.Core"
+             x:Class="BasketballScout.App.Views.TeamDetailPage"
+             x:DataType="vm:TeamDetailViewModel"
+             Title="{Binding Name, StringFormat='Team: {0}', FallbackValue='New Team'}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+
+            <!-- Team Info -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Team Details" FontSize="18" FontAttributes="Bold" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Team Name" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                        <Entry Text="{Binding Name}"
+                               Placeholder="e.g. Brugge Bears"
+                               FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Abbreviation (3 letters)" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                        <Entry Text="{Binding Abbreviation}"
+                               Placeholder="e.g. BRU"
+                               MaxLength="5"
+                               FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Team Color" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                        <CollectionView ItemsSource="{Binding ColorOptions}"
+                                        SelectionMode="Single"
+                                        HeightRequest="50">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" />
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Border WidthRequest="36" HeightRequest="36"
+                                            StrokeShape="RoundRectangle 18"
+                                            BackgroundColor="{Binding .}"
+                                            StrokeThickness="2"
+                                            Stroke="{AppThemeBinding Light=#ccc, Dark=#555}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TeamDetailViewModel}}, Path=SetColorCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                        <!-- Selected color preview -->
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <BoxView WidthRequest="24" HeightRequest="24"
+                                     CornerRadius="4"
+                                     Color="{Binding Color}" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding Color}"
+                                   FontSize="14"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <Button Text="Save Team"
+                            Command="{Binding SaveCommand}"
+                            BackgroundColor="#e85d26"
+                            TextColor="White"
+                            FontAttributes="Bold"
+                            CornerRadius="8" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Players Section -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                    IsVisible="{Binding IsExistingTeam}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <Label Text="Roster" FontSize="18" FontAttributes="Bold" VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="Import JSON"
+                                Command="{Binding ImportRosterCommand}"
+                                BackgroundColor="#4ade80"
+                                TextColor="#1a1a1a"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="12,6" />
+                        <Button Grid.Column="2"
+                                Text="+ Player"
+                                Command="{Binding AddPlayerCommand}"
+                                BackgroundColor="#2d7dd2"
+                                TextColor="White"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="12,6" />
+                    </Grid>
+
+                    <CollectionView ItemsSource="{Binding Players}"
+                                    EmptyView="No players on this roster yet.">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Player">
+                                <SwipeView>
+                                    <SwipeView.RightItems>
+                                        <SwipeItems>
+                                            <SwipeItem Text="Delete"
+                                                       BackgroundColor="#f87171"
+                                                       Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TeamDetailViewModel}}, Path=DeletePlayerCommand}"
+                                                       CommandParameter="{Binding .}" />
+                                        </SwipeItems>
+                                    </SwipeView.RightItems>
+                                    <Border Padding="12" Margin="0,3"
+                                            BackgroundColor="{AppThemeBinding Light=#fff, Dark=#222}"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="{AppThemeBinding Light=#ddd, Dark=#444}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TeamDetailViewModel}}, Path=SelectPlayerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <Grid ColumnDefinitions="50,*,Auto,Auto" ColumnSpacing="12">
+                                            <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                                   FontSize="20"
+                                                   FontAttributes="Bold"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center" />
+                                            <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontSize="16" />
+                                                <Label Text="{Binding Position}" FontSize="12"
+                                                       TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                                            </VerticalStackLayout>
+                                            <Border Grid.Column="2"
+                                                    Padding="6,2"
+                                                    StrokeShape="RoundRectangle 4"
+                                                    BackgroundColor="{AppThemeBinding Light=#e8f5e9, Dark=#1b3a1b}"
+                                                    IsVisible="{Binding IsActive}">
+                                                <Label Text="Active" FontSize="11"
+                                                       TextColor="{AppThemeBinding Light=#2e7d32, Dark=#4ade80}" />
+                                            </Border>
+                                            <Border Grid.Column="2"
+                                                    Padding="6,2"
+                                                    StrokeShape="RoundRectangle 4"
+                                                    BackgroundColor="{AppThemeBinding Light=#fce4ec, Dark=#3a1b1b}"
+                                                    IsVisible="{Binding IsActive, Converter={StaticResource InvertedBoolConverter}}">
+                                                <Label Text="Bench" FontSize="11"
+                                                       TextColor="{AppThemeBinding Light=#c62828, Dark=#f87171}" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </SwipeView>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
