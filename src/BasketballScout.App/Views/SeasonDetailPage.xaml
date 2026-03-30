@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:models="clr-namespace:BasketballScout.Core.Models;assembly=BasketballScout.Core"
+             x:Class="BasketballScout.App.Views.SeasonDetailPage"
+             x:DataType="vm:SeasonDetailViewModel"
+             Title="{Binding Name, StringFormat='Season: {0}', FallbackValue='New Season'}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+
+            <!-- Season Info -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Season Details" FontSize="18" FontAttributes="Bold" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Name" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                        <Entry Text="{Binding Name}"
+                               Placeholder="e.g. 2025-2026 Season"
+                               FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Start Date" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <DatePicker Date="{Binding StartDate}" FontSize="14" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Label Text="End Date" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <DatePicker Date="{Binding EndDate}" FontSize="14" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Button Text="Save Season"
+                            Command="{Binding SaveCommand}"
+                            BackgroundColor="#e85d26"
+                            TextColor="White"
+                            FontAttributes="Bold"
+                            CornerRadius="8" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Teams Section -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                    IsVisible="{Binding IsExistingSeason}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Teams" FontSize="18" FontAttributes="Bold" VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="+ Team"
+                                Command="{Binding AddTeamCommand}"
+                                BackgroundColor="#2d7dd2"
+                                TextColor="White"
+                                FontAttributes="Bold"
+                                CornerRadius="8"
+                                Padding="12,6" />
+                    </Grid>
+
+                    <CollectionView ItemsSource="{Binding Teams}"
+                                    EmptyView="No teams yet. Tap '+ Team' to add one.">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Team">
+                                <Border Padding="12" Margin="0,4"
+                                        BackgroundColor="{AppThemeBinding Light=#fff, Dark=#222}"
+                                        StrokeShape="RoundRectangle 6"
+                                        Stroke="{AppThemeBinding Light=#ddd, Dark=#444}">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonDetailViewModel}}, Path=SelectTeamCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="8,*,Auto" ColumnSpacing="12">
+                                        <BoxView WidthRequest="8"
+                                                 HeightRequest="40"
+                                                 CornerRadius="4"
+                                                 Color="{Binding Color}" />
+                                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontSize="16" FontAttributes="Bold" />
+                                            <Label Text="{Binding Abbreviation}" FontSize="12"
+                                                   TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="2"
+                                               Text="{Binding Players.Count, StringFormat='{0} players'}"
+                                               FontSize="13"
+                                               TextColor="{AppThemeBinding Light=#999, Dark=#666}"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -2,27 +2,68 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:models="clr-namespace:BasketballScout.Core.Models;assembly=BasketballScout.Core"
              x:Class="BasketballScout.App.Views.SeasonOverviewPage"
              x:DataType="vm:SeasonOverviewViewModel"
              Title="Seasons">
 
     <Grid RowDefinitions="Auto,*" Padding="16">
-        <Label Text="BasketballScout"
-               FontSize="24"
-               FontAttributes="Bold"
-               HorizontalOptions="Center"
-               Margin="0,0,0,16" />
+        <Grid ColumnDefinitions="*,Auto">
+            <Label Text="BasketballScout"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center" />
+            <Button Grid.Column="1"
+                    Text="+ Season"
+                    Command="{Binding AddSeasonCommand}"
+                    BackgroundColor="#e85d26"
+                    TextColor="White"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    Padding="16,8" />
+        </Grid>
 
         <CollectionView Grid.Row="1"
                         ItemsSource="{Binding Seasons}"
-                        EmptyView="No seasons yet. Tap + to create one.">
+                        Margin="0,16,0,0"
+                        EmptyView="No seasons yet. Tap '+ Season' to create one.">
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="x:String">
-                    <Border Padding="12" Margin="0,4"
-                            BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
-                            StrokeShape="RoundRectangle 8">
-                        <Label Text="{Binding .}" FontSize="16" />
-                    </Border>
+                <DataTemplate x:DataType="models:Season">
+                    <SwipeView>
+                        <SwipeView.RightItems>
+                            <SwipeItems>
+                                <SwipeItem Text="Delete"
+                                           BackgroundColor="#f87171"
+                                           Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonOverviewViewModel}}, Path=DeleteSeasonCommand}"
+                                           CommandParameter="{Binding .}" />
+                            </SwipeItems>
+                        </SwipeView.RightItems>
+                        <Border Padding="16" Margin="0,4"
+                                BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonOverviewViewModel}}, Path=SelectSeasonCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                <Label Text="{Binding Name}"
+                                       FontSize="18"
+                                       FontAttributes="Bold" />
+                                <Label Grid.Row="1"
+                                       Text="{Binding StartDate, StringFormat='{0:MMM yyyy}'}"
+                                       FontSize="13"
+                                       TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                                <Label Grid.Column="1"
+                                       Grid.RowSpan="2"
+                                       Text=">"
+                                       FontSize="20"
+                                       TextColor="{AppThemeBinding Light=#999, Dark=#555}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </Border>
+                    </SwipeView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
