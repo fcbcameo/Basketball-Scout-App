@@ -76,14 +76,14 @@
                 <ScrollView Grid.Row="1" Padding="4,0,4,4">
                     <VerticalStackLayout Spacing="0">
                         <!-- Home Active Players -->
-                        <CollectionView ItemsSource="{Binding HomeOnCourt}" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
+                        <VerticalStackLayout x:Name="HomeOnCourtPanel" Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding HomeOnCourt}">
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:Player">
                                     <Border Padding="8,5" Margin="0,1.5"
                                             StrokeShape="RoundRectangle 6"
                                             Stroke="#1a1a1a" StrokeThickness="2"
-                                            BackgroundColor="#141414"
-                                            x:Name="HomePlayerCard">
+                                            BackgroundColor="#141414">
                                         <Border.GestureRecognizers>
                                             <TapGestureRecognizer
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
@@ -103,8 +103,8 @@
                                         </HorizontalStackLayout>
                                     </Border>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
 
                         <!-- Divider -->
                         <BoxView HeightRequest="1" Color="#1a1a1a" Margin="0,4" />
@@ -112,8 +112,9 @@
                                TextColor="#333" CharacterSpacing="1" Margin="4,0,0,2" />
 
                         <!-- Home Bench -->
-                        <CollectionView ItemsSource="{Binding HomeBench}" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
+                        <VerticalStackLayout x:Name="HomeBenchPanel" Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding HomeBench}">
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:Player">
                                     <Border Padding="8,5" Margin="0,1.5"
                                             StrokeShape="RoundRectangle 6"
@@ -138,8 +139,8 @@
                                         </HorizontalStackLayout>
                                     </Border>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </ScrollView>
             </Grid>
@@ -337,8 +338,9 @@
                 <ScrollView Grid.Row="1" Padding="4,0,4,4">
                     <VerticalStackLayout Spacing="0">
                         <!-- Away Active Players -->
-                        <CollectionView ItemsSource="{Binding AwayOnCourt}" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
+                        <VerticalStackLayout x:Name="AwayOnCourtPanel" Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding AwayOnCourt}">
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:Player">
                                     <Border Padding="8,5" Margin="0,1.5"
                                             StrokeShape="RoundRectangle 6"
@@ -363,8 +365,8 @@
                                         </HorizontalStackLayout>
                                     </Border>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
 
                         <!-- Divider -->
                         <BoxView HeightRequest="1" Color="#1a1a1a" Margin="0,4" />
@@ -373,8 +375,9 @@
                                HorizontalTextAlignment="End" />
 
                         <!-- Away Bench -->
-                        <CollectionView ItemsSource="{Binding AwayBench}" SelectionMode="None">
-                            <CollectionView.ItemTemplate>
+                        <VerticalStackLayout x:Name="AwayBenchPanel" Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding AwayBench}">
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:Player">
                                     <Border Padding="8,5" Margin="0,1.5"
                                             StrokeShape="RoundRectangle 6"
@@ -399,8 +402,8 @@
                                         </HorizontalStackLayout>
                                     </Border>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </ScrollView>
             </Grid>
