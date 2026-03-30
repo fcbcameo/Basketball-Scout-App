@@ -98,6 +98,20 @@ public partial class SeasonDetailViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task RefreshTeamsAsync()
+    {
+        if (SeasonId > 0)
+        {
+            var teams = await _teamRepository.GetBySeasonIdAsync(SeasonId);
+            Teams.Clear();
+            foreach (var team in teams)
+            {
+                Teams.Add(team);
+            }
+        }
+    }
+
+    [RelayCommand]
     private async Task AddTeamAsync()
     {
         if (!IsExistingSeason)
