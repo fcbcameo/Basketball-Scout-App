@@ -74,6 +74,20 @@ public partial class TeamDetailViewModel : ObservableObject
     }
 
     [RelayCommand]
+    public async Task RefreshPlayersAsync()
+    {
+        if (TeamId > 0)
+        {
+            var players = await _playerRepository.GetByTeamIdAsync(TeamId);
+            Players.Clear();
+            foreach (var player in players)
+            {
+                Players.Add(player);
+            }
+        }
+    }
+
+    [RelayCommand]
     private void SetColor(string color)
     {
         Color = color;
