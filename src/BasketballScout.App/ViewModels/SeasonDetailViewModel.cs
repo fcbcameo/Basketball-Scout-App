@@ -128,4 +128,16 @@ public partial class SeasonDetailViewModel : ObservableObject
     {
         await Shell.Current.GoToAsync($"{nameof(Views.TeamDetailPage)}?teamId={team.Id}&seasonId={SeasonId}");
     }
+
+    [RelayCommand]
+    private async Task StartGameAsync()
+    {
+        if (Teams.Count < 2)
+        {
+            await Shell.Current.DisplayAlertAsync("Need Teams", "Add at least 2 teams before starting a game.", "OK");
+            return;
+        }
+
+        await Shell.Current.GoToAsync($"{nameof(Views.GameSetupPage)}?seasonId={SeasonId}");
+    }
 }

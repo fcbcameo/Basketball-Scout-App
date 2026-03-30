@@ -40,12 +40,16 @@ public static class MauiProgram
         builder.Services.AddTransient<SeasonDetailViewModel>();
         builder.Services.AddTransient<TeamDetailViewModel>();
         builder.Services.AddTransient<PlayerDetailViewModel>();
+        builder.Services.AddTransient<GameSetupViewModel>();
+        builder.Services.AddTransient<GameScoringViewModel>();
 
         // Pages
         builder.Services.AddTransient<SeasonOverviewPage>();
         builder.Services.AddTransient<SeasonDetailPage>();
         builder.Services.AddTransient<TeamDetailPage>();
         builder.Services.AddTransient<PlayerDetailPage>();
+        builder.Services.AddTransient<GameSetupPage>();
+        builder.Services.AddTransient<GameScoringPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

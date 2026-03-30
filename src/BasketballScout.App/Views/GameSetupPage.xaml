@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:models="clr-namespace:BasketballScout.Core.Models;assembly=BasketballScout.Core"
+             x:Class="BasketballScout.App.Views.GameSetupPage"
+             x:DataType="vm:GameSetupViewModel"
+             Title="Game Setup">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+
+            <!-- Game Info -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Game Info" FontSize="18" FontAttributes="Bold" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Date" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <DatePicker Date="{Binding GameDate}" FontSize="14" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Label Text="Location" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <Entry Text="{Binding Location}" Placeholder="e.g. Home Gym" FontSize="14" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Team Selection -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+
+                <!-- Home Team -->
+                <Border Padding="16"
+                        BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                        StrokeShape="RoundRectangle 8"
+                        Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="HOME TEAM" FontSize="13" FontAttributes="Bold"
+                               TextColor="#e85d26" />
+                        <Picker Title="Select Home Team"
+                                ItemsSource="{Binding Teams}"
+                                SelectedItem="{Binding SelectedHomeTeam}"
+                                ItemDisplayBinding="{Binding Name}"
+                                FontSize="14" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Away Team -->
+                <Border Grid.Column="1" Padding="16"
+                        BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                        StrokeShape="RoundRectangle 8"
+                        Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="AWAY TEAM" FontSize="13" FontAttributes="Bold"
+                               TextColor="#2d7dd2" />
+                        <Picker Title="Select Away Team"
+                                ItemsSource="{Binding Teams}"
+                                SelectedItem="{Binding SelectedAwayTeam}"
+                                ItemDisplayBinding="{Binding Name}"
+                                FontSize="14" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <!-- Home Lineup -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                    IsVisible="{Binding SelectedHomeTeam, Converter={StaticResource NotNullToBoolConverter}}">
+                <VerticalStackLayout Spacing="8">
+                    <Label FontSize="16" FontAttributes="Bold">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="Home Starters " />
+                                <Span Text="{Binding HomeActivePlayers.Count, StringFormat='({0}/5)'}"
+                                      TextColor="#e85d26" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+                    <Label Text="Tap players to toggle between starters and bench"
+                           FontSize="12" TextColor="{AppThemeBinding Light=#888, Dark=#777}" />
+
+                    <!-- Active -->
+                    <Label Text="STARTERS" FontSize="11" FontAttributes="Bold"
+                           TextColor="#4caf50" Margin="0,4,0,0" />
+                    <CollectionView ItemsSource="{Binding HomeActivePlayers}"
+                                    EmptyView="No starters selected">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Player">
+                                <Border Padding="10,8" Margin="0,2"
+                                        BackgroundColor="#1a4caf50"
+                                        StrokeShape="RoundRectangle 6"
+                                        Stroke="#4caf50" StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameSetupViewModel}}, Path=ToggleHomePlayerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                               FontSize="14" FontAttributes="Bold"
+                                               TextColor="#4caf50" WidthRequest="40" />
+                                        <Label Text="{Binding Name}" FontSize="14"
+                                               VerticalOptions="Center" />
+                                        <Label Text="{Binding Position}" FontSize="11"
+                                               TextColor="{AppThemeBinding Light=#888, Dark=#777}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <!-- Bench -->
+                    <Label Text="BENCH" FontSize="11" FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#999, Dark=#666}" Margin="0,8,0,0" />
+                    <CollectionView ItemsSource="{Binding HomeBenchPlayers}"
+                                    EmptyView="All players are starters">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Player">
+                                <Border Padding="10,8" Margin="0,2"
+                                        BackgroundColor="{AppThemeBinding Light=#f0f0f0, Dark=#222}"
+                                        StrokeShape="RoundRectangle 6"
+                                        Stroke="{AppThemeBinding Light=#ddd, Dark=#444}" StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameSetupViewModel}}, Path=ToggleHomePlayerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                               FontSize="14" FontAttributes="Bold"
+                                               TextColor="{AppThemeBinding Light=#999, Dark=#666}" WidthRequest="40" />
+                                        <Label Text="{Binding Name}" FontSize="14"
+                                               TextColor="{AppThemeBinding Light=#888, Dark=#777}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Away Lineup -->
+            <Border Padding="16"
+                    BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                    IsVisible="{Binding SelectedAwayTeam, Converter={StaticResource NotNullToBoolConverter}}">
+                <VerticalStackLayout Spacing="8">
+                    <Label FontSize="16" FontAttributes="Bold">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="Away Starters " />
+                                <Span Text="{Binding AwayActivePlayers.Count, StringFormat='({0}/5)'}"
+                                      TextColor="#2d7dd2" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
+                    <Label Text="Tap players to toggle between starters and bench"
+                           FontSize="12" TextColor="{AppThemeBinding Light=#888, Dark=#777}" />
+
+                    <!-- Active -->
+                    <Label Text="STARTERS" FontSize="11" FontAttributes="Bold"
+                           TextColor="#4caf50" Margin="0,4,0,0" />
+                    <CollectionView ItemsSource="{Binding AwayActivePlayers}"
+                                    EmptyView="No starters selected">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Player">
+                                <Border Padding="10,8" Margin="0,2"
+                                        BackgroundColor="#1a4caf50"
+                                        StrokeShape="RoundRectangle 6"
+                                        Stroke="#4caf50" StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameSetupViewModel}}, Path=ToggleAwayPlayerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                               FontSize="14" FontAttributes="Bold"
+                                               TextColor="#4caf50" WidthRequest="40" />
+                                        <Label Text="{Binding Name}" FontSize="14"
+                                               VerticalOptions="Center" />
+                                        <Label Text="{Binding Position}" FontSize="11"
+                                               TextColor="{AppThemeBinding Light=#888, Dark=#777}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <!-- Bench -->
+                    <Label Text="BENCH" FontSize="11" FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#999, Dark=#666}" Margin="0,8,0,0" />
+                    <CollectionView ItemsSource="{Binding AwayBenchPlayers}"
+                                    EmptyView="All players are starters">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Player">
+                                <Border Padding="10,8" Margin="0,2"
+                                        BackgroundColor="{AppThemeBinding Light=#f0f0f0, Dark=#222}"
+                                        StrokeShape="RoundRectangle 6"
+                                        Stroke="{AppThemeBinding Light=#ddd, Dark=#444}" StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameSetupViewModel}}, Path=ToggleAwayPlayerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                               FontSize="14" FontAttributes="Bold"
+                                               TextColor="{AppThemeBinding Light=#999, Dark=#666}" WidthRequest="40" />
+                                        <Label Text="{Binding Name}" FontSize="14"
+                                               TextColor="{AppThemeBinding Light=#888, Dark=#777}"
+                                               VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Start Game Button -->
+            <Button Text="Start Game"
+                    Command="{Binding StartGameCommand}"
+                    BackgroundColor="#e85d26"
+                    TextColor="White"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    CornerRadius="12"
+                    HeightRequest="56"
+                    Margin="0,8" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
