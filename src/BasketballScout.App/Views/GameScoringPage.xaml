@@ -3,369 +3,409 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
              xmlns:models="clr-namespace:BasketballScout.Core.Models;assembly=BasketballScout.Core"
-             xmlns:converters="clr-namespace:BasketballScout.App.Converters"
+             xmlns:views="clr-namespace:BasketballScout.App.Views"
              x:Class="BasketballScout.App.Views.GameScoringPage"
              x:DataType="vm:GameScoringViewModel"
              Shell.NavBarIsVisible="False"
-             Title="Game">
+             BackgroundColor="#0a0a0a">
 
-    <ContentPage.Resources>
-        <converters:BoolToColorConverter x:Key="MadeColorConverter"
-                                         TrueColor="#4caf50" FalseColor="#f44336" />
-        <converters:NotNullToBoolConverter x:Key="NotNullToBoolConverter" />
-    </ContentPage.Resources>
+    <Grid RowDefinitions="40,*" BackgroundColor="#0a0a0a">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" BackgroundColor="{AppThemeBinding Light=#fafafa, Dark=#111}">
-
-        <!-- ═══════ ROW 0: SCOREBOARD ═══════ -->
-        <Grid Padding="8,8" ColumnDefinitions="*,Auto,*"
-              BackgroundColor="{AppThemeBinding Light=#1a1a1a, Dark=#0a0a0a}">
-
-            <!-- Home Score -->
-            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
-                <VerticalStackLayout.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SwitchTeamCommand}" />
-                </VerticalStackLayout.GestureRecognizers>
-                <Label Text="{Binding HomeTeamAbbr}" FontSize="13" FontAttributes="Bold"
-                       TextColor="{Binding HomeTeamColor}" HorizontalOptions="Center" />
-                <Label Text="{Binding HomeScore}" FontSize="42" FontAttributes="Bold"
-                       TextColor="White" HorizontalOptions="Center" />
-                <Label Text="{Binding HomeFouls, StringFormat='Fouls: {0}'}" FontSize="10"
-                       TextColor="#888" HorizontalOptions="Center" />
-            </VerticalStackLayout>
-
-            <!-- Center: Quarter / Clock / Undo -->
-            <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center" Spacing="2">
-                <Label Text="{Binding Quarter, StringFormat='Q{0}'}" FontSize="16" FontAttributes="Bold"
-                       TextColor="White" HorizontalOptions="Center" />
-                <Label Text="{Binding GameClock}" FontSize="14"
-                       TextColor="#aaa" HorizontalOptions="Center" />
-                <HorizontalStackLayout Spacing="8" HorizontalOptions="Center" Margin="0,4,0,0">
-                    <Button Text="Undo" Command="{Binding UndoCommand}"
-                            FontSize="11" Padding="10,4"
-                            BackgroundColor="#333" TextColor="#ccc" CornerRadius="4"
-                            HeightRequest="28" MinimumHeightRequest="28" />
-                    <Button Text="Next Q" Command="{Binding NextQuarterCommand}"
-                            FontSize="11" Padding="10,4"
-                            BackgroundColor="#333" TextColor="#ccc" CornerRadius="4"
-                            HeightRequest="28" MinimumHeightRequest="28" />
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- ROW 0: SCOREBOARD BAR                           -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <Grid BackgroundColor="#0e0e0e" Padding="16,0" ColumnDefinitions="*,Auto,*">
+            <Border StrokeShape="RoundRectangle 6" Stroke="Transparent"
+                    BackgroundColor="#0e0e0e" Padding="12,2"
+                    HorizontalOptions="Center" VerticalOptions="Center">
+                <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
+                    <Label Text="{Binding HomeTeamAbbr}" FontSize="11" FontAttributes="Bold"
+                           TextColor="{Binding HomeTeamColor}" VerticalOptions="Center" />
+                    <Label Text="{Binding HomeScore}" FontSize="24" FontAttributes="Bold"
+                           TextColor="White" VerticalOptions="Center" />
+                    <Label Text="{Binding HomeFouls, StringFormat='F:{0}'}" FontSize="9"
+                           TextColor="#555" VerticalOptions="Center" />
                 </HorizontalStackLayout>
-            </VerticalStackLayout>
+            </Border>
+
+            <!-- Center: Clock + Buttons -->
+            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                <Label Text="{Binding Quarter, StringFormat='Q{0}'}" FontSize="9" FontAttributes="Bold"
+                       TextColor="#555" VerticalOptions="Center" CharacterSpacing="2" />
+                <Label Text="{Binding GameClock}" FontSize="17" FontAttributes="Bold"
+                       TextColor="#ddd" VerticalOptions="Center" />
+                <Button Text="Q+" Command="{Binding NextQuarterCommand}"
+                        FontSize="9" FontAttributes="Bold" Padding="6,2"
+                        BackgroundColor="#1a1a1a" TextColor="#666" CornerRadius="3"
+                        HeightRequest="24" MinimumHeightRequest="24" />
+                <Button Text="UNDO" Command="{Binding UndoCommand}"
+                        FontSize="9" FontAttributes="Bold" Padding="6,2"
+                        BackgroundColor="#2a1515" TextColor="#f87171" CornerRadius="3"
+                        HeightRequest="24" MinimumHeightRequest="24" />
+            </HorizontalStackLayout>
 
             <!-- Away Score -->
-            <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center" VerticalOptions="Center">
-                <VerticalStackLayout.GestureRecognizers>
-                    <TapGestureRecognizer Command="{Binding SwitchTeamCommand}" />
-                </VerticalStackLayout.GestureRecognizers>
-                <Label Text="{Binding AwayTeamAbbr}" FontSize="13" FontAttributes="Bold"
-                       TextColor="{Binding AwayTeamColor}" HorizontalOptions="Center" />
-                <Label Text="{Binding AwayScore}" FontSize="42" FontAttributes="Bold"
-                       TextColor="White" HorizontalOptions="Center" />
-                <Label Text="{Binding AwayFouls, StringFormat='Fouls: {0}'}" FontSize="10"
-                       TextColor="#888" HorizontalOptions="Center" />
-            </VerticalStackLayout>
+            <Border Grid.Column="2" StrokeShape="RoundRectangle 6" Stroke="Transparent"
+                    BackgroundColor="#0e0e0e" Padding="12,2"
+                    HorizontalOptions="Center" VerticalOptions="Center">
+                <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
+                    <Label Text="{Binding AwayFouls, StringFormat='F:{0}'}" FontSize="9"
+                           TextColor="#555" VerticalOptions="Center" />
+                    <Label Text="{Binding AwayScore}" FontSize="24" FontAttributes="Bold"
+                           TextColor="White" VerticalOptions="Center" />
+                    <Label Text="{Binding AwayTeamAbbr}" FontSize="11" FontAttributes="Bold"
+                           TextColor="{Binding AwayTeamColor}" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
         </Grid>
 
-        <!-- ═══════ ROW 1: PLAYER BAR ═══════ -->
-        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
-                    BackgroundColor="{AppThemeBinding Light=#eee, Dark=#1a1a1a}" Padding="4">
-            <HorizontalStackLayout Spacing="6" x:Name="PlayerBar">
-                <!-- Team indicator -->
-                <Border Padding="8,4" StrokeShape="RoundRectangle 4" Stroke="Transparent"
-                        BackgroundColor="{Binding IsHomeSelected, Converter={StaticResource MadeColorConverter}}"
-                        VerticalOptions="Center">
-                    <Label Text="{Binding IsHomeSelected, StringFormat='{0}'}"
-                           FontSize="10" TextColor="White"
-                           x:Name="TeamIndicatorLabel" />
-                </Border>
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- ROW 1: 3-COLUMN LAYOUT                          -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <Grid Grid.Row="1" ColumnDefinitions="140,*,140">
 
-                <CollectionView ItemsSource="{Binding CurrentOnCourt}"
-                                SelectionMode="Single"
-                                SelectedItem="{Binding SelectedPlayer}"
-                                ItemsLayout="HorizontalList"
-                                HeightRequest="56">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Player">
-                            <Border Padding="10,6" Margin="2"
-                                    StrokeShape="RoundRectangle 8"
-                                    Stroke="{AppThemeBinding Light=#ccc, Dark=#444}"
-                                    BackgroundColor="{AppThemeBinding Light=#fff, Dark=#222}"
-                                    MinimumWidthRequest="56">
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
-                                        CommandParameter="{Binding .}" />
-                                </Border.GestureRecognizers>
-                                <VerticalStackLayout HorizontalOptions="Center">
-                                    <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
-                                           FontSize="16" FontAttributes="Bold"
-                                           HorizontalOptions="Center" />
-                                    <Label Text="{Binding Name}" FontSize="9"
-                                           HorizontalOptions="Center" LineBreakMode="TailTruncation"
-                                           MaximumWidthRequest="60" />
+            <!-- ─── LEFT: HOME TEAM ROSTER ─── -->
+            <Grid BackgroundColor="#0c0c0c"
+                  RowDefinitions="Auto,*">
+                <Border StrokeShape="RoundRectangle 0" Stroke="Transparent"
+                        BackgroundColor="#0c0c0c" Padding="8,6,8,4">
+                    <Label Text="{Binding HomeTeamName}" FontSize="8" FontAttributes="Bold"
+                           TextColor="{Binding HomeTeamColor}" CharacterSpacing="1.5"
+                           TextTransform="Uppercase" />
+                </Border>
+                <ScrollView Grid.Row="1" Padding="4,0,4,4">
+                    <VerticalStackLayout Spacing="0">
+                        <!-- Home Active Players -->
+                        <CollectionView ItemsSource="{Binding HomeOnCourt}" SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:Player">
+                                    <Border Padding="8,5" Margin="0,1.5"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="#1a1a1a" StrokeThickness="2"
+                                            BackgroundColor="#141414"
+                                            x:Name="HomePlayerCard">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <HorizontalStackLayout Spacing="6">
+                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                                   TextColor="#bbb" VerticalOptions="Center" MinimumWidthRequest="30"
+                                                   HorizontalTextAlignment="Center" />
+                                            <VerticalStackLayout VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                       TextColor="#bbb" LineBreakMode="TailTruncation"
+                                                       MaximumWidthRequest="75" />
+                                                <Label Text="{Binding Position}" FontSize="8"
+                                                       TextColor="#444" />
+                                            </VerticalStackLayout>
+                                        </HorizontalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <!-- Divider -->
+                        <BoxView HeightRequest="1" Color="#1a1a1a" Margin="0,4" />
+                        <Label Text="BENCH" FontSize="8" FontAttributes="Bold"
+                               TextColor="#333" CharacterSpacing="1" Margin="4,0,0,2" />
+
+                        <!-- Home Bench -->
+                        <CollectionView ItemsSource="{Binding HomeBench}" SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:Player">
+                                    <Border Padding="8,5" Margin="0,1.5"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="#1a1a1a" StrokeThickness="2"
+                                            BackgroundColor="#141414">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <HorizontalStackLayout Spacing="6">
+                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                                   TextColor="#444" VerticalOptions="Center" MinimumWidthRequest="30"
+                                                   HorizontalTextAlignment="Center" />
+                                            <VerticalStackLayout VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                       TextColor="#555" LineBreakMode="TailTruncation"
+                                                       MaximumWidthRequest="75" />
+                                                <Label Text="{Binding Position}" FontSize="8"
+                                                       TextColor="#333" />
+                                            </VerticalStackLayout>
+                                        </HorizontalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </ScrollView>
+            </Grid>
+
+            <!-- ─── CENTER: COURT + STAT BAR ─── -->
+            <Grid Grid.Column="1" RowDefinitions="*,Auto">
+
+                <!-- Court area -->
+                <Grid x:Name="CourtContainer">
+                    <!-- Court background (GraphicsView) -->
+                    <GraphicsView x:Name="CourtGraphicsView"
+                                  BackgroundColor="#18150f">
+                        <GraphicsView.Drawable>
+                            <views:CourtDrawable />
+                        </GraphicsView.Drawable>
+                    </GraphicsView>
+
+                    <!-- Touch overlay for court taps -->
+                    <AbsoluteLayout x:Name="CourtOverlay" BackgroundColor="Transparent"
+                                    InputTransparent="False">
+                        <!-- Shot dots rendered dynamically in code-behind -->
+                    </AbsoluteLayout>
+
+                    <!-- Empty state hint -->
+                    <VerticalStackLayout x:Name="CourtHint"
+                                         HorizontalOptions="Center" VerticalOptions="Center"
+                                         InputTransparent="True">
+                        <Label Text="Select player, tap court" FontSize="10"
+                               TextColor="#2a2520" HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+
+                    <!-- ── Shot Confirmation Popup ── -->
+                    <Border x:Name="ShotConfirmPopup"
+                            IsVisible="{Binding PendingShot, Converter={StaticResource NotNullToBoolConverter}}"
+                            Padding="10" Margin="0,0,0,8"
+                            BackgroundColor="#1a1714"
+                            StrokeShape="RoundRectangle 10"
+                            Stroke="#e85d2655" StrokeThickness="1"
+                            HorizontalOptions="Center" VerticalOptions="End"
+                            WidthRequest="280" InputTransparent="False">
+                        <VerticalStackLayout Spacing="6">
+                            <!-- Header -->
+                            <Grid ColumnDefinitions="*,Auto">
+                                <HorizontalStackLayout Spacing="6">
+                                    <Label Text="{Binding SelectedPlayer.JerseyNumber, StringFormat='#{0}'}"
+                                           FontSize="10" FontAttributes="Bold" TextColor="{Binding HomeTeamColor}" />
+                                    <Label x:Name="ZoneLabel" FontSize="10" FontAttributes="Bold"
+                                           TextColor="#60a5fa" Text="2PT ZONE" />
+                                </HorizontalStackLayout>
+                                <Label Grid.Column="1" Text="X" FontSize="13" TextColor="#444"
+                                       HorizontalOptions="End">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnShotCancelClicked" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </Grid>
+                            <!-- Buttons: 2PT / 3PT columns -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                                <VerticalStackLayout Spacing="3">
+                                    <Label Text="2PT" FontSize="8" FontAttributes="Bold"
+                                           TextColor="#555" HorizontalOptions="Center" CharacterSpacing="1" />
+                                    <Button Text="MADE" FontSize="13" FontAttributes="Bold"
+                                            BackgroundColor="#4ade8018" TextColor="#4ade80"
+                                            CornerRadius="6" Padding="0,10"
+                                            BorderColor="#4ade8033" BorderWidth="1"
+                                            Clicked="On2PtMadeClicked" />
+                                    <Button Text="MISS" FontSize="13" FontAttributes="Bold"
+                                            BackgroundColor="#f8717118" TextColor="#f87171"
+                                            CornerRadius="6" Padding="0,10"
+                                            BorderColor="#f8717133" BorderWidth="1"
+                                            Clicked="On2PtMissClicked" />
                                 </VerticalStackLayout>
-                            </Border>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </HorizontalStackLayout>
-        </ScrollView>
+                                <VerticalStackLayout Grid.Column="1" Spacing="3">
+                                    <Label Text="3PT" FontSize="8" FontAttributes="Bold"
+                                           TextColor="#555" HorizontalOptions="Center" CharacterSpacing="1" />
+                                    <Button Text="MADE" FontSize="13" FontAttributes="Bold"
+                                            BackgroundColor="#4ade8018" TextColor="#4ade80"
+                                            CornerRadius="6" Padding="0,10"
+                                            BorderColor="#4ade8033" BorderWidth="1"
+                                            Clicked="On3PtMadeClicked" />
+                                    <Button Text="MISS" FontSize="13" FontAttributes="Bold"
+                                            BackgroundColor="#f8717118" TextColor="#f87171"
+                                            CornerRadius="6" Padding="0,10"
+                                            BorderColor="#f8717133" BorderWidth="1"
+                                            Clicked="On3PtMissClicked" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
 
-        <!-- ═══════ ROW 2: COURT AREA ═══════ -->
-        <Grid Grid.Row="2">
-            <!-- Court background with tap handler -->
-            <AbsoluteLayout x:Name="CourtArea"
-                            BackgroundColor="#e8d5a3"
-                            Margin="8">
-                <!-- Court lines drawn via code-behind -->
+                    <!-- ── Follow-Up Popup (assist / rebound) ── -->
+                    <Border x:Name="FollowUpPopup"
+                            IsVisible="{Binding FollowUp, Converter={StaticResource NotNullToBoolConverter}}"
+                            Padding="10" Margin="0,0,0,8"
+                            BackgroundColor="#121a12"
+                            StrokeShape="RoundRectangle 10"
+                            Stroke="#4ade8033" StrokeThickness="1"
+                            HorizontalOptions="Center" VerticalOptions="End"
+                            WidthRequest="320" InputTransparent="False">
+                        <VerticalStackLayout Spacing="6">
+                            <Label x:Name="FollowUpLabel" Text="ASSISTED BY?"
+                                   FontSize="9" FontAttributes="Bold" TextColor="#555"
+                                   CharacterSpacing="1" />
+                            <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
+                                        x:Name="FollowUpPlayersContainer">
+                                <!-- Populated dynamically in code-behind -->
+                            </FlexLayout>
+                            <Button Text="SKIP" FontSize="9" FontAttributes="Bold"
+                                    BackgroundColor="#141414" TextColor="#444"
+                                    CornerRadius="5" Padding="8,6"
+                                    Command="{Binding SkipFollowUpCommand}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
 
-                <!-- Half-court outline -->
-                <BoxView AbsoluteLayout.LayoutBounds="0,0,1,1"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="Transparent"
-                         x:Name="CourtBackground" />
+                <!-- ── Quick Stat Bar ── -->
+                <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
+                            BackgroundColor="#0e0e0e" Padding="6,4">
+                    <HorizontalStackLayout Spacing="3">
+                        <!-- FT label -->
+                        <Label Text="FT" FontSize="8" FontAttributes="Bold" TextColor="#444"
+                               CharacterSpacing="1" VerticalOptions="Center" Margin="4,0" />
+                        <Button Text="V" FontSize="11" FontAttributes="Bold"
+                                BackgroundColor="#4ade8012" TextColor="#4ade80"
+                                BorderColor="#4ade8022" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnFTMadeClicked" />
+                        <Button Text="X" FontSize="11" FontAttributes="Bold"
+                                BackgroundColor="#f8717112" TextColor="#f87171"
+                                BorderColor="#f8717122" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnFTMissClicked" />
 
-                <!-- Court markings (simplified) -->
-                <!-- Baseline -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.05,0.02,0.9,0.003"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Left sideline -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.05,0,0.003,1"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Right sideline -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.95,0,0.003,1"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Free throw lane left -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.31,0.02,0.003,0.38"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Free throw lane right -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.69,0.02,0.003,0.38"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Free throw line -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.31,0.40,0.38,0.003"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Backboard -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.38,0.04,0.24,0.004"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Rim -->
-                <Ellipse AbsoluteLayout.LayoutBounds="0.46,0.05,0.08,0.05"
-                         AbsoluteLayout.LayoutFlags="All"
-                         Stroke="#8b7355" StrokeThickness="1.5"
-                         Fill="Transparent" />
-                <!-- 3pt line approximation (left) -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.09,0.02,0.003,0.18"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- 3pt line approximation (right) -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.91,0.02,0.003,0.18"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
-                <!-- Half court line -->
-                <BoxView AbsoluteLayout.LayoutBounds="0.05,0.98,0.9,0.003"
-                         AbsoluteLayout.LayoutFlags="All"
-                         BackgroundColor="#8b7355" />
+                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
 
-                <!-- Shot dots rendered here dynamically -->
-            </AbsoluteLayout>
+                        <Button Text="AST" FontSize="10" FontAttributes="Bold"
+                                BackgroundColor="#141414" TextColor="#60a5fa"
+                                BorderColor="#1e1e1e" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnAstClicked" />
+                        <Button Text="STL" FontSize="10" FontAttributes="Bold"
+                                BackgroundColor="#141414" TextColor="#c084fc"
+                                BorderColor="#1e1e1e" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnStlClicked" />
+                        <Button Text="BLK" FontSize="10" FontAttributes="Bold"
+                                BackgroundColor="#141414" TextColor="#f472b6"
+                                BorderColor="#1e1e1e" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnBlkClicked" />
+                        <Button Text="TO" FontSize="10" FontAttributes="Bold"
+                                BackgroundColor="#141414" TextColor="#fb923c"
+                                BorderColor="#1e1e1e" BorderWidth="1"
+                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnToClicked" />
 
-            <!-- Shot Confirmation Popup (overlay) -->
-            <Border x:Name="ShotConfirmPopup"
-                    IsVisible="{Binding PendingShot, Converter={StaticResource NotNullToBoolConverter}}"
-                    Padding="16"
-                    BackgroundColor="{AppThemeBinding Light=#ffffffee, Dark=#222222ee}"
-                    StrokeShape="RoundRectangle 12"
-                    Stroke="{AppThemeBinding Light=#ccc, Dark=#555}"
-                    HorizontalOptions="Center" VerticalOptions="Center"
-                    WidthRequest="280">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="Shot Result" FontSize="18" FontAttributes="Bold"
-                           HorizontalOptions="Center" />
-                    <Label Text="{Binding SelectedPlayer.Name, StringFormat='#{0}'}"
-                           FontSize="14" TextColor="{AppThemeBinding Light=#666, Dark=#aaa}"
-                           HorizontalOptions="Center" />
+                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
 
-                    <!-- 2PT buttons -->
-                    <Label Text="2-POINTER" FontSize="12" FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                        <Button Text="2PT Made" BackgroundColor="#4caf50" TextColor="White"
-                                FontAttributes="Bold" CornerRadius="8"
-                                Clicked="On2PtMadeClicked" />
-                        <Button Grid.Column="1" Text="2PT Miss" BackgroundColor="#f44336" TextColor="White"
-                                FontAttributes="Bold" CornerRadius="8"
-                                Clicked="On2PtMissClicked" />
-                    </Grid>
+                        <Button Text="O-RB" FontSize="9" FontAttributes="Bold"
+                                BackgroundColor="#fbbf2410" TextColor="#fbbf24"
+                                BorderColor="#fbbf2420" BorderWidth="1"
+                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnOrebClicked" />
+                        <Button Text="D-RB" FontSize="9" FontAttributes="Bold"
+                                BackgroundColor="#60a5fa10" TextColor="#60a5fa"
+                                BorderColor="#60a5fa20" BorderWidth="1"
+                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnDrebClicked" />
 
-                    <!-- 3PT buttons -->
-                    <Label Text="3-POINTER" FontSize="12" FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                        <Button Text="3PT Made" BackgroundColor="#4caf50" TextColor="White"
-                                FontAttributes="Bold" CornerRadius="8"
-                                Clicked="On3PtMadeClicked" />
-                        <Button Grid.Column="1" Text="3PT Miss" BackgroundColor="#f44336" TextColor="White"
-                                FontAttributes="Bold" CornerRadius="8"
-                                Clicked="On3PtMissClicked" />
-                    </Grid>
+                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
 
-                    <Button Text="Cancel" BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light=#666, Dark=#aaa}"
-                            Clicked="OnShotCancelClicked" />
-                </VerticalStackLayout>
-            </Border>
+                        <Button Text="PF" FontSize="9" FontAttributes="Bold"
+                                BackgroundColor="#fbbf2410" TextColor="#fbbf24"
+                                BorderColor="#fbbf2420" BorderWidth="1"
+                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnPfClicked" />
+                        <Button Text="TF" FontSize="9" FontAttributes="Bold"
+                                BackgroundColor="#f8717110" TextColor="#f87171"
+                                BorderColor="#f8717120" BorderWidth="1"
+                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                Clicked="OnTechClicked" />
+                    </HorizontalStackLayout>
+                </ScrollView>
+            </Grid>
 
-            <!-- Follow-Up Popup (assist / rebound) -->
-            <Border x:Name="FollowUpPopup"
-                    IsVisible="{Binding FollowUp, Converter={StaticResource NotNullToBoolConverter}}"
-                    Padding="16"
-                    BackgroundColor="{AppThemeBinding Light=#ffffffee, Dark=#222222ee}"
-                    StrokeShape="RoundRectangle 12"
-                    Stroke="{AppThemeBinding Light=#ccc, Dark=#555}"
-                    HorizontalOptions="Center" VerticalOptions="Center"
-                    WidthRequest="280">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="{Binding FollowUp.Type, StringFormat='Select {0} by:'}"
-                           FontSize="18" FontAttributes="Bold"
-                           HorizontalOptions="Center" />
-                    <Label Text="Tap a player or skip"
-                           FontSize="12" TextColor="{AppThemeBinding Light=#888, Dark=#777}"
-                           HorizontalOptions="Center" />
+            <!-- ─── RIGHT: AWAY TEAM ROSTER ─── -->
+            <Grid Grid.Column="2" BackgroundColor="#0c0c0c"
+                  RowDefinitions="Auto,*">
+                <Border StrokeShape="RoundRectangle 0" Stroke="Transparent"
+                        BackgroundColor="#0c0c0c" Padding="8,6,8,4">
+                    <Label Text="{Binding AwayTeamName}" FontSize="8" FontAttributes="Bold"
+                           TextColor="{Binding AwayTeamColor}" CharacterSpacing="1.5"
+                           TextTransform="Uppercase" HorizontalTextAlignment="End" />
+                </Border>
+                <ScrollView Grid.Row="1" Padding="4,0,4,4">
+                    <VerticalStackLayout Spacing="0">
+                        <!-- Away Active Players -->
+                        <CollectionView ItemsSource="{Binding AwayOnCourt}" SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:Player">
+                                    <Border Padding="8,5" Margin="0,1.5"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="#1a1a1a" StrokeThickness="2"
+                                            BackgroundColor="#141414">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <HorizontalStackLayout Spacing="6" FlowDirection="RightToLeft">
+                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                                   TextColor="#bbb" VerticalOptions="Center" MinimumWidthRequest="30"
+                                                   HorizontalTextAlignment="Center" />
+                                            <VerticalStackLayout VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                       TextColor="#bbb" LineBreakMode="TailTruncation"
+                                                       MaximumWidthRequest="75" HorizontalTextAlignment="End" />
+                                                <Label Text="{Binding Position}" FontSize="8"
+                                                       TextColor="#444" HorizontalTextAlignment="End" />
+                                            </VerticalStackLayout>
+                                        </HorizontalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
 
-                    <CollectionView ItemsSource="{Binding CurrentOnCourt}"
-                                    HeightRequest="200">
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="models:Player">
-                                <Border Padding="10,8" Margin="0,2"
-                                        BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#2a2a2a}"
-                                        StrokeShape="RoundRectangle 6"
-                                        Stroke="{AppThemeBinding Light=#ddd, Dark=#444}">
-                                    <Border.GestureRecognizers>
-                                        <TapGestureRecognizer
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
-                                            CommandParameter="{Binding .}" />
-                                    </Border.GestureRecognizers>
-                                    <HorizontalStackLayout Spacing="8">
-                                        <Label Text="{Binding JerseyNumber, StringFormat='#{0}'}"
-                                               FontSize="14" FontAttributes="Bold" WidthRequest="40" />
-                                        <Label Text="{Binding Name}" FontSize="14"
-                                               VerticalOptions="Center" />
-                                    </HorizontalStackLayout>
-                                </Border>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        <!-- Divider -->
+                        <BoxView HeightRequest="1" Color="#1a1a1a" Margin="0,4" />
+                        <Label Text="BENCH" FontSize="8" FontAttributes="Bold"
+                               TextColor="#333" CharacterSpacing="1" Margin="0,0,4,2"
+                               HorizontalTextAlignment="End" />
 
-                    <Button Text="Skip" Command="{Binding SkipFollowUpCommand}"
-                            BackgroundColor="#666" TextColor="White" CornerRadius="8" />
-                </VerticalStackLayout>
-            </Border>
+                        <!-- Away Bench -->
+                        <CollectionView ItemsSource="{Binding AwayBench}" SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:Player">
+                                    <Border Padding="8,5" Margin="0,1.5"
+                                            StrokeShape="RoundRectangle 6"
+                                            Stroke="#1a1a1a" StrokeThickness="2"
+                                            BackgroundColor="#141414">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=SelectPlayerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Border.GestureRecognizers>
+                                        <HorizontalStackLayout Spacing="6" FlowDirection="RightToLeft">
+                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                                   TextColor="#444" VerticalOptions="Center" MinimumWidthRequest="30"
+                                                   HorizontalTextAlignment="Center" />
+                                            <VerticalStackLayout VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                       TextColor="#555" LineBreakMode="TailTruncation"
+                                                       MaximumWidthRequest="75" HorizontalTextAlignment="End" />
+                                                <Label Text="{Binding Position}" FontSize="8"
+                                                       TextColor="#333" HorizontalTextAlignment="End" />
+                                            </VerticalStackLayout>
+                                        </HorizontalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </ScrollView>
+            </Grid>
+
         </Grid>
-
-        <!-- ═══════ ROW 3: QUICK STAT BAR ═══════ -->
-        <ScrollView Grid.Row="3" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
-                    BackgroundColor="{AppThemeBinding Light=#1a1a1a, Dark=#0a0a0a}" Padding="6,4">
-            <HorizontalStackLayout Spacing="4">
-                <!-- Free Throw -->
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#2e7d32" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnFTMadeClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="FT Made" FontSize="11" FontAttributes="Bold" TextColor="White"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#c62828" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnFTMissClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="FT Miss" FontSize="11" FontAttributes="Bold" TextColor="White"
-                           HorizontalOptions="Center" />
-                </Border>
-
-                <!-- Divider -->
-                <BoxView WidthRequest="1" HeightRequest="24" Color="#444" VerticalOptions="Center" />
-
-                <!-- Quick Stats -->
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnAstClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="AST" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnStlClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="STL" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnBlkClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="BLK" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnToClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="TO" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnOrebClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="OREB" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#333" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnDrebClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="DREB" FontSize="11" FontAttributes="Bold" TextColor="#aaa"
-                           HorizontalOptions="Center" />
-                </Border>
-
-                <!-- Divider -->
-                <BoxView WidthRequest="1" HeightRequest="24" Color="#444" VerticalOptions="Center" />
-
-                <!-- Fouls -->
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#e65100" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnPfClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="PF" FontSize="11" FontAttributes="Bold" TextColor="White"
-                           HorizontalOptions="Center" />
-                </Border>
-                <Border Padding="8,6" StrokeShape="RoundRectangle 6"
-                        BackgroundColor="#b71c1c" Stroke="Transparent">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnTechClicked" />
-                    </Border.GestureRecognizers>
-                    <Label Text="TECH" FontSize="11" FontAttributes="Bold" TextColor="White"
-                           HorizontalOptions="Center" />
-                </Border>
-            </HorizontalStackLayout>
-        </ScrollView>
-
     </Grid>
 
 </ContentPage>

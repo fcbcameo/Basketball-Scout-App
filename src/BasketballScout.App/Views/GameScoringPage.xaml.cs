@@ -13,96 +13,158 @@ public partial class GameScoringPage : ContentPage
         _vm = viewModel;
         BindingContext = _vm;
 
-        // Wire up court tap
+        // Wire court tap on the transparent overlay
         var tapGesture = new TapGestureRecognizer();
         tapGesture.Tapped += OnCourtTapped;
-        CourtArea.GestureRecognizers.Add(tapGesture);
+        CourtOverlay.GestureRecognizers.Add(tapGesture);
 
-        // Subscribe to shot chart changes to render dots
+        // Render shot dots when collection changes
         _vm.ShotChartDots.CollectionChanged += (_, _) => RenderShotDots();
 
-        // Update team indicator label
+        // Update follow-up popup contents when follow-up state changes
+        _vm.PropertyChanged += OnVmPropertyChanged;
+
+        // Update player card highlighting when selection changes
         _vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(GameScoringViewModel.IsHomeSelected))
-            {
-                TeamIndicatorLabel.Text = _vm.IsHomeSelected ? "HOME" : "AWAY";
-            }
+            if (e.PropertyName == nameof(GameScoringViewModel.SelectedPlayer))
+                UpdateCourtHint();
         };
-        TeamIndicatorLabel.Text = "HOME";
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(GameScoringViewModel.FollowUp))
+        {
+            RebuildFollowUpButtons();
+            // Update label
+            if (_vm.FollowUp is not null)
+                FollowUpLabel.Text = _vm.FollowUp.Type == "assist" ? "ASSISTED BY?" : "REBOUND BY?";
+        }
+
+        if (e.PropertyName == nameof(GameScoringViewModel.PendingShot) && _vm.PendingShot is not null)
+        {
+            ZoneLabel.Text = _vm.PendingShot.IsSuggested3Pt ? "3PT ZONE" : "2PT ZONE";
+            ZoneLabel.TextColor = _vm.PendingShot.IsSuggested3Pt
+                ? Color.FromArgb("#fbbf24") : Color.FromArgb("#60a5fa");
+        }
+    }
+
+    private void UpdateCourtHint()
+    {
+        CourtHint.IsVisible = _vm.SelectedPlayer is null
+            && _vm.PendingShot is null
+            && _vm.ShotChartDots.Count == 0;
     }
 
     private void OnCourtTapped(object? sender, TappedEventArgs e)
     {
-        if (_vm.SelectedPlayer is null || _vm.FollowUp is not null) return;
+        if (_vm.SelectedPlayer is null || _vm.FollowUp is not null || _vm.PendingShot is not null)
+            return;
 
-        var position = e.GetPosition(CourtArea);
+        var position = e.GetPosition(CourtOverlay);
         if (position is null) return;
 
-        var courtWidth = CourtArea.Width;
-        var courtHeight = CourtArea.Height;
-
+        var courtWidth = CourtOverlay.Width;
+        var courtHeight = CourtOverlay.Height;
         if (courtWidth <= 0 || courtHeight <= 0) return;
 
-        // Normalize to 0-1 range
-        float x = (float)(position.Value.X / courtWidth);
-        float y = (float)(position.Value.Y / courtHeight);
+        float x = Math.Clamp((float)(position.Value.X / courtWidth), 0f, 1f);
+        float y = Math.Clamp((float)(position.Value.Y / courtHeight), 0f, 1f);
 
-        // Clamp
-        x = Math.Clamp(x, 0f, 1f);
-        y = Math.Clamp(y, 0f, 1f);
-
-        // Auto-suggest 3PT based on distance from basket
-        // Basket is roughly at (0.5, 0.06)
-        double dx = x - 0.5;
-        double dy = y - 0.06;
+        // 3PT detection matching the JSX mockup logic
+        // Court is oriented with basket at bottom (y≈0.95), half-court at top (y≈0.02)
+        // Convert to the mockup's coordinate system (basket at bottom = high y%)
+        double xPct = x * 100;
+        double yPct = y * 100;
+        double dx = xPct - 50;
+        double dy = yPct - 90;
         double dist = Math.Sqrt(dx * dx + dy * dy);
-        bool suggest3 = dist > 0.38; // Approximate 3pt line distance
+        bool is3pt = dist > 42 || ((xPct < 12 || xPct > 88) && yPct > 58);
 
         _vm.CourtTappedCommand.Execute(new ShotPending
         {
             X = x,
             Y = y,
-            IsSuggested3Pt = suggest3
+            IsSuggested3Pt = is3pt
         });
     }
 
     private void RenderShotDots()
     {
-        // Remove existing shot dot labels (keep the court markings)
-        var dotsToRemove = CourtArea.Children
+        // Remove existing shot dots
+        var dotsToRemove = CourtOverlay.Children
             .OfType<Border>()
             .Where(b => b.ClassId == "ShotDot")
             .ToList();
-
         foreach (var dot in dotsToRemove)
-            CourtArea.Children.Remove(dot);
+            CourtOverlay.Children.Remove(dot);
 
-        // Add current dots
         foreach (var shot in _vm.ShotChartDots)
         {
+            var madeColor = Color.FromArgb("#4ade80");
+            var missColor = Color.FromArgb("#f87171");
+            var color = shot.IsMade ? madeColor : missColor;
+
             var dot = new Border
             {
                 ClassId = "ShotDot",
-                WidthRequest = 20,
-                HeightRequest = 20,
-                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
-                BackgroundColor = shot.IsMade ? Color.FromArgb("#4caf50") : Color.FromArgb("#f44336"),
-                Stroke = Colors.White,
-                StrokeThickness = 1.5,
+                WidthRequest = shot.IsMade ? 16 : 14,
+                HeightRequest = shot.IsMade ? 16 : 14,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 8 },
+                BackgroundColor = shot.IsMade ? Color.FromArgb("#4ade8033") : Colors.Transparent,
+                Stroke = color,
+                StrokeThickness = 2,
+                InputTransparent = true,
                 Content = new Label
                 {
                     Text = shot.IsMade ? "\u2713" : "\u2717",
-                    FontSize = 10,
-                    TextColor = Colors.White,
+                    FontSize = 8,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = color,
                     HorizontalOptions = LayoutOptions.Center,
                     VerticalOptions = LayoutOptions.Center
                 }
             };
 
-            AbsoluteLayout.SetLayoutBounds(dot, new Rect(shot.X, shot.Y, 20, 20));
+            // Position proportionally, offset by half the dot size
+            AbsoluteLayout.SetLayoutBounds(dot, new Rect(shot.X, shot.Y,
+                AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
             AbsoluteLayout.SetLayoutFlags(dot, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.PositionProportional);
-            CourtArea.Children.Add(dot);
+            CourtOverlay.Children.Add(dot);
+        }
+
+        UpdateCourtHint();
+    }
+
+    private void RebuildFollowUpButtons()
+    {
+        FollowUpPlayersContainer.Children.Clear();
+        if (_vm.FollowUp is null) return;
+
+        var onCourt = _vm.CurrentOnCourt;
+        foreach (var p in onCourt)
+        {
+            if (p.Id == _vm.SelectedPlayer?.Id) continue;
+
+            var btn = new Button
+            {
+                Text = $"#{p.JerseyNumber}",
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                BackgroundColor = Color.FromArgb("#1e1e1e"),
+                TextColor = Color.FromArgb("#ccc"),
+                BorderColor = Color.FromArgb("#333"),
+                BorderWidth = 1,
+                CornerRadius = 5,
+                Padding = new Thickness(10, 6),
+                Margin = new Thickness(0, 0, 3, 3),
+                HeightRequest = 34,
+                MinimumHeightRequest = 34,
+            };
+            var player = p; // capture for lambda
+            btn.Clicked += (_, _) => _vm.HandleFollowUpCommand.Execute(player);
+            FollowUpPlayersContainer.Children.Add(btn);
         }
     }
 
@@ -119,37 +181,37 @@ public partial class GameScoringPage : ContentPage
     private void On3PtMissClicked(object? sender, EventArgs e)
         => _vm.ConfirmShotCommand.Execute(new ShotConfirmation { Is3Pt = true, IsMade = false });
 
-    private void OnShotCancelClicked(object? sender, EventArgs e)
+    private void OnShotCancelClicked(object? sender, TappedEventArgs e)
         => _vm.PendingShot = null;
 
     // ── Quick stat handlers ──
-    private void OnFTMadeClicked(object? sender, TappedEventArgs e)
+    private void OnFTMadeClicked(object? sender, EventArgs e)
         => _vm.RecordFreeThrowCommand.Execute(true);
 
-    private void OnFTMissClicked(object? sender, TappedEventArgs e)
+    private void OnFTMissClicked(object? sender, EventArgs e)
         => _vm.RecordFreeThrowCommand.Execute(false);
 
-    private void OnAstClicked(object? sender, TappedEventArgs e)
+    private void OnAstClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("ast");
 
-    private void OnStlClicked(object? sender, TappedEventArgs e)
+    private void OnStlClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("stl");
 
-    private void OnBlkClicked(object? sender, TappedEventArgs e)
+    private void OnBlkClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("blk");
 
-    private void OnToClicked(object? sender, TappedEventArgs e)
+    private void OnToClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("to");
 
-    private void OnOrebClicked(object? sender, TappedEventArgs e)
+    private void OnOrebClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("oreb");
 
-    private void OnDrebClicked(object? sender, TappedEventArgs e)
+    private void OnDrebClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("dreb");
 
-    private void OnPfClicked(object? sender, TappedEventArgs e)
+    private void OnPfClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("pf");
 
-    private void OnTechClicked(object? sender, TappedEventArgs e)
+    private void OnTechClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("tech");
 }
