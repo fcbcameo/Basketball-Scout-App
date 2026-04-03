@@ -81,6 +81,7 @@ public partial class GameScoringViewModel : ObservableObject
     public ObservableCollection<Player> AwayBench { get; } = new();
     public ObservableCollection<ShotDot> ShotChartDots { get; } = new();
     public ObservableCollection<PlayLogEntry> PlayLog { get; } = new();
+    public ObservableCollection<Player> FollowUpCandidates { get; } = new();
 
     // ── Query property helpers ──
     public string HomeActiveIdsString { set => _homeActiveIdsParsed = value; }
@@ -217,18 +218,50 @@ public partial class GameScoringViewModel : ObservableObject
         {
             if (isHome) HomeScore += pts; else AwayScore += pts;
             AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Made", isHome);
-            FollowUp = new FollowUpState("assist", statEvent.Id);
+            SetFollowUp("assist", statEvent.Id);
         }
         else
         {
             AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Miss", isHome);
-            FollowUp = new FollowUpState("rebound", statEvent.Id);
+            SetFollowUp("rebound", statEvent.Id);
         }
 
         PendingShot = null;
     }
 
     // ── Follow-up (assist/rebound) ──
+    private void SetFollowUp(string type, int linkedEventId)
+    {
+        FollowUpCandidates.Clear();
+
+        if (type == "assist")
+        {
+            // Teammates on court, excluding the scorer
+            var teammates = IsHomeSelected ? HomeOnCourt : AwayOnCourt;
+            foreach (var p in teammates)
+            {
+                if (p.Id != SelectedPlayer?.Id)
+                    FollowUpCandidates.Add(p);
+            }
+        }
+        else // rebound
+        {
+            // ALL on-court players from both teams
+            foreach (var p in HomeOnCourt)
+                FollowUpCandidates.Add(p);
+            foreach (var p in AwayOnCourt)
+                FollowUpCandidates.Add(p);
+        }
+
+        FollowUp = new FollowUpState(type, linkedEventId);
+    }
+
+    private void ClearFollowUp()
+    {
+        FollowUp = null;
+        FollowUpCandidates.Clear();
+    }
+
     [RelayCommand]
     private async Task HandleFollowUpAsync(Player? player)
     {
@@ -257,13 +290,13 @@ public partial class GameScoringViewModel : ObservableObject
             AddLog($"  > #{player.JerseyNumber} {player.Name} — {(isAssist ? "Assist" : "Rebound")}", isHome);
         }
 
-        FollowUp = null;
+        ClearFollowUp();
     }
 
     [RelayCommand]
     private void SkipFollowUp()
     {
-        FollowUp = null;
+        ClearFollowUp();
     }
 
     // ── Quick stats ──
@@ -370,7 +403,7 @@ public partial class GameScoringViewModel : ObservableObject
         if (PlayLog.Count > 0)
             PlayLog.RemoveAt(0);
 
-        FollowUp = null;
+        ClearFollowUp();
         PendingShot = null;
     }
 

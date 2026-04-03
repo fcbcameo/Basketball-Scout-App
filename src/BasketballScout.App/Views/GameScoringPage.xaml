@@ -148,23 +148,23 @@
             <!-- ─── CENTER: COURT + STAT BAR ─── -->
             <Grid Grid.Column="1" RowDefinitions="*,Auto">
 
-                <!-- Court area -->
-                <Grid x:Name="CourtContainer">
-                    <!-- Court background (GraphicsView) -->
+                <!-- Court area + popups layered -->
+                <Grid>
+                    <!-- Layer 1: Court drawing -->
                     <GraphicsView x:Name="CourtGraphicsView"
-                                  BackgroundColor="#18150f">
+                                  BackgroundColor="#18150f"
+                                  InputTransparent="True">
                         <GraphicsView.Drawable>
                             <views:CourtDrawable />
                         </GraphicsView.Drawable>
                     </GraphicsView>
 
-                    <!-- Touch overlay for court taps -->
+                    <!-- Layer 2: Touch overlay for court taps + shot dots -->
                     <AbsoluteLayout x:Name="CourtOverlay" BackgroundColor="Transparent"
                                     InputTransparent="False">
-                        <!-- Shot dots rendered dynamically in code-behind -->
                     </AbsoluteLayout>
 
-                    <!-- Empty state hint -->
+                    <!-- Layer 3: Empty state hint -->
                     <VerticalStackLayout x:Name="CourtHint"
                                          HorizontalOptions="Center" VerticalOptions="Center"
                                          InputTransparent="True">
@@ -172,7 +172,7 @@
                                TextColor="#2a2520" HorizontalOptions="Center" />
                     </VerticalStackLayout>
 
-                    <!-- ── Shot Confirmation Popup ── -->
+                    <!-- Layer 4: Shot Confirmation Popup -->
                     <Border x:Name="ShotConfirmPopup"
                             IsVisible="{Binding PendingShot, Converter={StaticResource NotNullToBoolConverter}}"
                             Padding="10" Margin="0,0,0,8"
@@ -180,9 +180,9 @@
                             StrokeShape="RoundRectangle 10"
                             Stroke="#e85d2655" StrokeThickness="1"
                             HorizontalOptions="Center" VerticalOptions="End"
-                            WidthRequest="280" InputTransparent="False">
+                            WidthRequest="280"
+                            ZIndex="10">
                         <VerticalStackLayout Spacing="6">
-                            <!-- Header -->
                             <Grid ColumnDefinitions="*,Auto">
                                 <HorizontalStackLayout Spacing="6">
                                     <Label Text="{Binding SelectedPlayer.JerseyNumber, StringFormat='#{0}'}"
@@ -197,7 +197,6 @@
                                     </Label.GestureRecognizers>
                                 </Label>
                             </Grid>
-                            <!-- Buttons: 2PT / 3PT columns -->
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
                                 <VerticalStackLayout Spacing="3">
                                     <Label Text="2PT" FontSize="8" FontAttributes="Bold"
@@ -231,7 +230,7 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- ── Follow-Up Popup (assist / rebound) ── -->
+                    <!-- Layer 5: Follow-Up Popup (assist / rebound) -->
                     <Border x:Name="FollowUpPopup"
                             IsVisible="{Binding FollowUp, Converter={StaticResource NotNullToBoolConverter}}"
                             Padding="10" Margin="0,0,0,8"
@@ -239,14 +238,28 @@
                             StrokeShape="RoundRectangle 10"
                             Stroke="#4ade8033" StrokeThickness="1"
                             HorizontalOptions="Center" VerticalOptions="End"
-                            WidthRequest="320" InputTransparent="False">
+                            WidthRequest="320"
+                            ZIndex="11">
                         <VerticalStackLayout Spacing="6">
                             <Label x:Name="FollowUpLabel" Text="ASSISTED BY?"
                                    FontSize="9" FontAttributes="Bold" TextColor="#555"
                                    CharacterSpacing="1" />
+                            <!-- Player buttons via BindableLayout -->
                             <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
-                                        x:Name="FollowUpPlayersContainer">
-                                <!-- Populated dynamically in code-behind -->
+                                        BindableLayout.ItemsSource="{Binding FollowUpCandidates}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="models:Player">
+                                        <Button Text="{Binding JerseyNumber, StringFormat='#{0}'}"
+                                                FontSize="12" FontAttributes="Bold"
+                                                BackgroundColor="#1e1e1e" TextColor="#ccc"
+                                                BorderColor="#333" BorderWidth="1"
+                                                CornerRadius="5" Padding="10,6"
+                                                Margin="0,0,3,3"
+                                                HeightRequest="34" MinimumHeightRequest="34"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
                             </FlexLayout>
                             <Button Text="SKIP" FontSize="9" FontAttributes="Bold"
                                     BackgroundColor="#141414" TextColor="#444"
