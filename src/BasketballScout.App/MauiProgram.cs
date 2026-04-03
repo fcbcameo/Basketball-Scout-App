@@ -1,6 +1,7 @@
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Data;
 using BasketballScout.Data.Repositories;
+using BasketballScout.Services;
 using BasketballScout.App.Views;
 using BasketballScout.App.ViewModels;
 using CommunityToolkit.Maui;
@@ -35,6 +36,9 @@ public static class MauiProgram
         builder.Services.AddScoped<IGameRepository, GameRepository>();
         builder.Services.AddScoped<IStatEventRepository, StatEventRepository>();
 
+        // Services
+        builder.Services.AddScoped<GameStatsService>();
+
         // ViewModels
         builder.Services.AddTransient<SeasonOverviewViewModel>();
         builder.Services.AddTransient<SeasonDetailViewModel>();
@@ -42,6 +46,9 @@ public static class MauiProgram
         builder.Services.AddTransient<PlayerDetailViewModel>();
         builder.Services.AddTransient<GameSetupViewModel>();
         builder.Services.AddTransient<GameScoringViewModel>();
+        builder.Services.AddTransient<GameBoxScoreViewModel>();
+        builder.Services.AddTransient<SeasonStatsViewModel>();
+        builder.Services.AddTransient<PlayerStatsViewModel>();
 
         // Pages
         builder.Services.AddTransient<SeasonOverviewPage>();
@@ -50,6 +57,9 @@ public static class MauiProgram
         builder.Services.AddTransient<PlayerDetailPage>();
         builder.Services.AddTransient<GameSetupPage>();
         builder.Services.AddTransient<GameScoringPage>();
+        builder.Services.AddTransient<GameBoxScorePage>();
+        builder.Services.AddTransient<SeasonStatsPage>();
+        builder.Services.AddTransient<PlayerStatsPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:views="clr-namespace:BasketballScout.App.Views"
+             x:Class="BasketballScout.App.Views.PlayerStatsPage"
+             x:DataType="vm:PlayerStatsViewModel"
+             Title="{Binding PlayerName}"
+             BackgroundColor="#0a0a0a">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="12" Spacing="12">
+
+            <!-- Player Header -->
+            <Border Padding="16" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <HorizontalStackLayout Spacing="16">
+                    <!-- Jersey number circle -->
+                    <Border WidthRequest="60" HeightRequest="60"
+                            StrokeShape="RoundRectangle 30"
+                            BackgroundColor="{Binding TeamColor}"
+                            Stroke="Transparent" HorizontalOptions="Start">
+                        <Label Text="{Binding JerseyNumber}" FontSize="28" FontAttributes="Bold"
+                               TextColor="White" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
+                    <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                        <Label Text="{Binding PlayerName}" FontSize="20" FontAttributes="Bold"
+                               TextColor="White" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Label Text="{Binding PositionDisplay}" FontSize="12" TextColor="#888" />
+                            <Label Text="|" FontSize="12" TextColor="#333" />
+                            <Label Text="{Binding TeamName}" FontSize="12" TextColor="#888" />
+                        </HorizontalStackLayout>
+                        <Label Text="{Binding GamesPlayed, StringFormat='{0} games played'}"
+                               FontSize="10" TextColor="#555" />
+                    </VerticalStackLayout>
+                </HorizontalStackLayout>
+            </Border>
+
+            <!-- Big 3 Stats -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                        Stroke="#1a1a1a">
+                    <VerticalStackLayout HorizontalOptions="Center">
+                        <Label Text="{Binding Ppg}" FontSize="28" FontAttributes="Bold"
+                               TextColor="White" HorizontalOptions="Center" />
+                        <Label Text="PPG" FontSize="10" TextColor="#555"
+                               HorizontalOptions="Center" CharacterSpacing="1" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Column="1" Padding="12" BackgroundColor="#0e0e0e"
+                        StrokeShape="RoundRectangle 10" Stroke="#1a1a1a">
+                    <VerticalStackLayout HorizontalOptions="Center">
+                        <Label Text="{Binding Rpg}" FontSize="28" FontAttributes="Bold"
+                               TextColor="White" HorizontalOptions="Center" />
+                        <Label Text="RPG" FontSize="10" TextColor="#555"
+                               HorizontalOptions="Center" CharacterSpacing="1" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Column="2" Padding="12" BackgroundColor="#0e0e0e"
+                        StrokeShape="RoundRectangle 10" Stroke="#1a1a1a">
+                    <VerticalStackLayout HorizontalOptions="Center">
+                        <Label Text="{Binding Apg}" FontSize="28" FontAttributes="Bold"
+                               TextColor="White" HorizontalOptions="Center" />
+                        <Label Text="APG" FontSize="10" TextColor="#555"
+                               HorizontalOptions="Center" CharacterSpacing="1" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <!-- Detailed Stats -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="DETAILED STATS" FontSize="10" FontAttributes="Bold"
+                           TextColor="#555" CharacterSpacing="2" />
+
+                    <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                        <!-- Row 0: Shooting -->
+                        <VerticalStackLayout HorizontalOptions="Center">
+                            <Label Text="{Binding FgPct, StringFormat='{0:F1}%'}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="{Binding FgDisplay}" FontSize="9" TextColor="#666" HorizontalOptions="Center" />
+                            <Label Text="FG%" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                            <Label Text="{Binding Fg3Pct, StringFormat='{0:F1}%'}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="{Binding Fg3Display}" FontSize="9" TextColor="#666" HorizontalOptions="Center" />
+                            <Label Text="3P%" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center">
+                            <Label Text="{Binding FtPct, StringFormat='{0:F1}%'}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="{Binding FtDisplay}" FontSize="9" TextColor="#666" HorizontalOptions="Center" />
+                            <Label Text="FT%" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+
+                        <!-- Row 1: Other stats -->
+                        <VerticalStackLayout Grid.Row="1" HorizontalOptions="Center">
+                            <Label Text="{Binding Spg}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="SPG" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="1" HorizontalOptions="Center">
+                            <Label Text="{Binding Bpg}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="BPG" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="2" HorizontalOptions="Center">
+                            <Label Text="{Binding Topg}" FontSize="18" FontAttributes="Bold"
+                                   TextColor="White" HorizontalOptions="Center" />
+                            <Label Text="TOPG" FontSize="9" TextColor="#555" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Shot Chart -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="SHOT CHART" FontSize="10" FontAttributes="Bold"
+                           TextColor="#555" CharacterSpacing="2" />
+
+                    <Grid HeightRequest="300">
+                        <!-- Court drawing -->
+                        <GraphicsView BackgroundColor="#18150f" InputTransparent="True">
+                            <GraphicsView.Drawable>
+                                <views:CourtDrawable />
+                            </GraphicsView.Drawable>
+                        </GraphicsView>
+
+                        <!-- Shot dots overlay -->
+                        <AbsoluteLayout x:Name="ShotChartOverlay" InputTransparent="True" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
