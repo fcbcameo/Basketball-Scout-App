@@ -36,13 +36,16 @@ public class PdfReportService
     private static XFont? _smallFont;
     private static bool _fontsInitialized;
 
-    private static XFont TitleFont => _titleFont ??= new("Arial", 18, XFontStyleEx.Bold);
-    private static XFont SubtitleFont => _subtitleFont ??= new("Arial", 11, XFontStyleEx.Regular);
-    private static XFont SectionFont => _sectionFont ??= new("Arial", 12, XFontStyleEx.Bold);
-    private static XFont HeaderFont => _headerFont ??= new("Arial", 7, XFontStyleEx.Bold);
-    private static XFont CellFont => _cellFont ??= new("Arial", 8, XFontStyleEx.Regular);
-    private static XFont CellBoldFont => _cellBoldFont ??= new("Arial", 8, XFontStyleEx.Bold);
-    private static XFont SmallFont => _smallFont ??= new("Arial", 6.5, XFontStyleEx.Regular);
+    // Force Unicode encoding so glyphs map correctly with custom font resolver
+    private static readonly XPdfFontOptions FontOptions = new(PdfFontEncoding.Unicode);
+
+    private static XFont TitleFont => _titleFont ??= new("Arial", 18, XFontStyleEx.Bold, FontOptions);
+    private static XFont SubtitleFont => _subtitleFont ??= new("Arial", 11, XFontStyleEx.Regular, FontOptions);
+    private static XFont SectionFont => _sectionFont ??= new("Arial", 12, XFontStyleEx.Bold, FontOptions);
+    private static XFont HeaderFont => _headerFont ??= new("Arial", 7, XFontStyleEx.Bold, FontOptions);
+    private static XFont CellFont => _cellFont ??= new("Arial", 8, XFontStyleEx.Regular, FontOptions);
+    private static XFont CellBoldFont => _cellBoldFont ??= new("Arial", 8, XFontStyleEx.Bold, FontOptions);
+    private static XFont SmallFont => _smallFont ??= new("Arial", 6.5, XFontStyleEx.Regular, FontOptions);
 
     private static void EnsureFontResolver()
     {
