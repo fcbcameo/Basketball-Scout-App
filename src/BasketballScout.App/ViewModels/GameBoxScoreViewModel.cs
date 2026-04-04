@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace BasketballScout.App.ViewModels;
 
@@ -8,6 +9,7 @@ namespace BasketballScout.App.ViewModels;
 public partial class GameBoxScoreViewModel : ObservableObject
 {
     private readonly GameStatsService _statsService;
+    private readonly PdfReportService _pdfService;
 
     [ObservableProperty]
     public partial int GameId { get; set; }
@@ -27,9 +29,32 @@ public partial class GameBoxScoreViewModel : ObservableObject
     public ObservableCollection<PlayerBoxLine> HomeLines { get; } = [];
     public ObservableCollection<PlayerBoxLine> AwayLines { get; } = [];
 
-    public GameBoxScoreViewModel(GameStatsService statsService)
+    public GameBoxScoreViewModel(GameStatsService statsService, PdfReportService pdfService)
     {
         _statsService = statsService;
+        _pdfService = pdfService;
+    }
+
+    [RelayCommand]
+    private async Task SharePdfAsync()
+    {
+        try
+        {
+            var pdfBytes = await _pdfService.GenerateGameReportAsync(GameId);
+            var fileName = $"GameReport_{HomeTeamName}_vs_{AwayTeamName}_{GameDateDisplay.Replace(" ", "").Replace(",", "")}.pdf";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
+
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = $"Game Report - {ScoreDisplay}",
+                File = new ShareFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
+        }
     }
 
     partial void OnGameIdChanged(int value)

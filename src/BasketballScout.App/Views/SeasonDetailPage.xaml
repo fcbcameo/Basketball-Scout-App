@@ -67,6 +67,28 @@
                         HeightRequest="50" />
             </Grid>
 
+            <!-- Import / Export -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8"
+                  IsVisible="{Binding IsExistingSeason}">
+                <Button Text="Export Season"
+                        Command="{Binding ExportSeasonCommand}"
+                        BackgroundColor="#e85d26"
+                        TextColor="White"
+                        FontSize="14"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+                <Button Grid.Column="1"
+                        Text="Import Season"
+                        Command="{Binding ImportSeasonCommand}"
+                        BackgroundColor="#555"
+                        TextColor="White"
+                        FontSize="14"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+            </Grid>
+
             <!-- Teams Section -->
             <Border Padding="16"
                     BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#1a1a1a}"

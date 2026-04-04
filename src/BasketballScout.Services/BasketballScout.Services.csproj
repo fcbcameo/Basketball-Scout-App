@@ -5,6 +5,10 @@
     <ProjectReference Include="..\BasketballScout.Data\BasketballScout.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

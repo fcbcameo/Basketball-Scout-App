@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
+using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -11,6 +12,7 @@ public partial class SeasonDetailViewModel : ObservableObject
 {
     private readonly ISeasonRepository _seasonRepository;
     private readonly ITeamRepository _teamRepository;
+    private readonly ImportExportService _importExportService;
 
     [ObservableProperty]
     public partial int SeasonId { get; set; }
@@ -29,10 +31,14 @@ public partial class SeasonDetailViewModel : ObservableObject
 
     public ObservableCollection<Team> Teams { get; } = new();
 
-    public SeasonDetailViewModel(ISeasonRepository seasonRepository, ITeamRepository teamRepository)
+    public SeasonDetailViewModel(
+        ISeasonRepository seasonRepository,
+        ITeamRepository teamRepository,
+        ImportExportService importExportService)
     {
         _seasonRepository = seasonRepository;
         _teamRepository = teamRepository;
+        _importExportService = importExportService;
     }
 
     partial void OnSeasonIdChanged(int value)
@@ -145,5 +151,57 @@ public partial class SeasonDetailViewModel : ObservableObject
         }
 
         await Shell.Current.GoToAsync($"{nameof(Views.GameSetupPage)}?seasonId={SeasonId}");
+    }
+
+    [RelayCommand]
+    private async Task ExportSeasonAsync()
+    {
+        try
+        {
+            var json = await _importExportService.ExportSeasonAsync(SeasonId);
+            var fileName = $"BasketballScout_{Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.json";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(filePath, json);
+
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = $"Export: {Name}",
+                File = new ShareFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Export failed: {ex.Message}", "OK");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportSeasonAsync()
+    {
+        try
+        {
+            var result = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Select a BasketballScout JSON file",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.Android, new[] { "application/json" } },
+                    { DevicePlatform.iOS, new[] { "public.json" } },
+                    { DevicePlatform.WinUI, new[] { ".json" } }
+                })
+            });
+
+            if (result is null) return;
+
+            var json = await File.ReadAllTextAsync(result.FullPath);
+            var newSeasonId = await _importExportService.ImportSeasonAsync(json);
+
+            await Shell.Current.DisplayAlertAsync("Imported",
+                "Season imported successfully. Navigate to the Seasons list to find it.", "OK");
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Import failed: {ex.Message}", "OK");
+        }
     }
 }
