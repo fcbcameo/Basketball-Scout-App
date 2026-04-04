@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:svc="clr-namespace:BasketballScout.Services;assembly=BasketballScout.Services"
+             x:Class="BasketballScout.App.Views.GameBoxScorePage"
+             x:DataType="vm:GameBoxScoreViewModel"
+             Title="Box Score"
+             BackgroundColor="#0a0a0a">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="12" Spacing="12">
+
+            <!-- Scoreboard Header -->
+            <Border Padding="16" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout HorizontalOptions="Center" Spacing="4">
+                    <Label Text="{Binding ScoreDisplay}" FontSize="22" FontAttributes="Bold"
+                           TextColor="White" HorizontalOptions="Center" />
+                    <Label Text="{Binding GameDateDisplay}" FontSize="12" TextColor="#666"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Home Team Box Score -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding HomeTeamName}" FontSize="14" FontAttributes="Bold"
+                           TextColor="White" />
+
+                    <!-- Header -->
+                    <Grid ColumnDefinitions="25,*,30,40,40,30,28,28,28,25,30"
+                          Padding="4,4" BackgroundColor="#141414">
+                        <Label Text="#" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="1" Text="PLAYER" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="2" Text="PTS" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="3" Text="FG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="4" Text="3PT" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="5" Text="FT" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="6" Text="REB" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="7" Text="AST" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="8" Text="STL" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="9" Text="BLK" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="10" Text="TO" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    </Grid>
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding HomeLines}" Spacing="0">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No stats" FontSize="11" TextColor="#444"
+                                   HorizontalOptions="Center" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:PlayerBoxLine">
+                                <Grid ColumnDefinitions="25,*,30,40,40,30,28,28,28,25,30"
+                                      Padding="4,5">
+                                    <Label Text="{Binding JerseyNumber}" FontSize="10" TextColor="#666" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="{Binding PlayerName}" FontSize="10" TextColor="#ccc"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="2" Text="{Binding Points}" FontSize="11" FontAttributes="Bold"
+                                           TextColor="White" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="3" Text="{Binding FgDisplay}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="4" Text="{Binding Fg3Display}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="5" Text="{Binding FtDisplay}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="6" Text="{Binding Rebounds}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="7" Text="{Binding Assists}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="8" Text="{Binding Steals}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="9" Text="{Binding Blocks}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="10" Text="{Binding Turnovers}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Away Team Box Score -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding AwayTeamName}" FontSize="14" FontAttributes="Bold"
+                           TextColor="White" />
+
+                    <!-- Header -->
+                    <Grid ColumnDefinitions="25,*,30,40,40,30,28,28,28,25,30"
+                          Padding="4,4" BackgroundColor="#141414">
+                        <Label Text="#" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="1" Text="PLAYER" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="2" Text="PTS" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="3" Text="FG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="4" Text="3PT" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="5" Text="FT" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="6" Text="REB" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="7" Text="AST" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="8" Text="STL" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="9" Text="BLK" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="10" Text="TO" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    </Grid>
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding AwayLines}" Spacing="0">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No stats" FontSize="11" TextColor="#444"
+                                   HorizontalOptions="Center" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:PlayerBoxLine">
+                                <Grid ColumnDefinitions="25,*,30,40,40,30,28,28,28,25,30"
+                                      Padding="4,5">
+                                    <Label Text="{Binding JerseyNumber}" FontSize="10" TextColor="#666" FontAttributes="Bold" />
+                                    <Label Grid.Column="1" Text="{Binding PlayerName}" FontSize="10" TextColor="#ccc"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="2" Text="{Binding Points}" FontSize="11" FontAttributes="Bold"
+                                           TextColor="White" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="3" Text="{Binding FgDisplay}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="4" Text="{Binding Fg3Display}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="5" Text="{Binding FtDisplay}" FontSize="9"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="6" Text="{Binding Rebounds}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="7" Text="{Binding Assists}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="8" Text="{Binding Steals}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="9" Text="{Binding Blocks}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="10" Text="{Binding Turnovers}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

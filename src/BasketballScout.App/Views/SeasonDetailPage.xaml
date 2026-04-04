@@ -45,16 +45,27 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Start Game Button -->
-            <Button Text="Start Game"
-                    Command="{Binding StartGameCommand}"
-                    BackgroundColor="#4caf50"
-                    TextColor="White"
-                    FontSize="16"
-                    FontAttributes="Bold"
-                    CornerRadius="10"
-                    HeightRequest="50"
-                    IsVisible="{Binding IsExistingSeason}" />
+            <!-- Action Buttons -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8"
+                  IsVisible="{Binding IsExistingSeason}">
+                <Button Text="Start Game"
+                        Command="{Binding StartGameCommand}"
+                        BackgroundColor="#4caf50"
+                        TextColor="White"
+                        FontSize="16"
+                        FontAttributes="Bold"
+                        CornerRadius="10"
+                        HeightRequest="50" />
+                <Button Grid.Column="1"
+                        Text="View Stats"
+                        Command="{Binding ViewStatsCommand}"
+                        BackgroundColor="#2d7dd2"
+                        TextColor="White"
+                        FontSize="16"
+                        FontAttributes="Bold"
+                        CornerRadius="10"
+                        HeightRequest="50" />
+            </Grid>
 
             <!-- Teams Section -->
             <Border Padding="16"

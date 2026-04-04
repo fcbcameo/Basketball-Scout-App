@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             xmlns:svc="clr-namespace:BasketballScout.Services;assembly=BasketballScout.Services"
+             x:Class="BasketballScout.App.Views.SeasonStatsPage"
+             x:DataType="vm:SeasonStatsViewModel"
+             Title="Season Stats"
+             BackgroundColor="#0a0a0a">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="12" Spacing="12">
+
+            <!-- Games Section -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="GAMES" FontSize="10" FontAttributes="Bold"
+                           TextColor="#555" CharacterSpacing="2" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="4">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No games played yet" FontSize="11" TextColor="#444"
+                                   HorizontalOptions="Center" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GameSummary">
+                                <Border Padding="10,8" StrokeShape="RoundRectangle 6"
+                                        Stroke="#1a1a1a" BackgroundColor="#141414">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewGameCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="50,*,Auto">
+                                        <Label Text="{Binding DateDisplay}" FontSize="10" TextColor="#666"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1" Text="{Binding ScoreDisplay}" FontSize="12"
+                                               FontAttributes="Bold" TextColor="#ccc"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                        <Label Grid.Column="2" Text=">" FontSize="14" TextColor="#444"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Season Leaders -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <Label Text="SEASON STATS" FontSize="10" FontAttributes="Bold"
+                               TextColor="#555" CharacterSpacing="2" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding TeamFilters}"
+                                SelectedItem="{Binding SelectedTeamFilter}"
+                                TextColor="#ccc"
+                                FontSize="12"
+                                BackgroundColor="#141414"
+                                MinimumWidthRequest="120" />
+                    </Grid>
+
+                    <!-- Header -->
+                    <Grid ColumnDefinitions="30,*,40,35,35,35,35,40,40,40"
+                          Padding="4,4" BackgroundColor="#141414">
+                        <Label Text="#" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="1" Text="PLAYER" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="2" Text="GP" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="3" Text="PPG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="4" Text="RPG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="5" Text="APG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="6" Text="SPG" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="7" Text="FG%" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="8" Text="3P%" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="9" Text="FT%" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    </Grid>
+
+                    <!-- Player rows -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PlayerStats}" Spacing="0">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No stats recorded yet" FontSize="11" TextColor="#444"
+                                   HorizontalOptions="Center" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:PlayerSeasonStats">
+                                <Border Padding="4,6" StrokeShape="RoundRectangle 0"
+                                        Stroke="Transparent" BackgroundColor="#0e0e0e">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewPlayerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="30,*,40,35,35,35,35,40,40,40">
+                                        <Label Text="{Binding JerseyNumber}" FontSize="10" FontAttributes="Bold"
+                                               TextColor="#666" />
+                                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                            <Label Text="{Binding PlayerName}" FontSize="10" TextColor="#ccc"
+                                                   LineBreakMode="TailTruncation" />
+                                            <Label Text="{Binding TeamAbbr}" FontSize="7" TextColor="#555" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="2" Text="{Binding GamesPlayed}" FontSize="10"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="3" Text="{Binding Ppg}" FontSize="11" FontAttributes="Bold"
+                                               TextColor="White" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="4" Text="{Binding Rpg}" FontSize="10"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="5" Text="{Binding Apg}" FontSize="10"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="6" Text="{Binding Spg}" FontSize="10"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="7" Text="{Binding FgPct, StringFormat='{0:F1}'}" FontSize="9"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="8" Text="{Binding Fg3Pct, StringFormat='{0:F1}'}" FontSize="9"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                        <Label Grid.Column="9" Text="{Binding FtPct, StringFormat='{0:F1}'}" FontSize="9"
+                                               TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

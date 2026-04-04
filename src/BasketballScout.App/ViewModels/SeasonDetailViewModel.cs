@@ -130,6 +130,12 @@ public partial class SeasonDetailViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ViewStatsAsync()
+    {
+        await Shell.Current.GoToAsync($"{nameof(Views.SeasonStatsPage)}?seasonId={SeasonId}");
+    }
+
+    [RelayCommand]
     private async Task StartGameAsync()
     {
         if (Teams.Count < 2)
