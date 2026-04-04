@@ -15,13 +15,16 @@ public class PdfReportService
     private readonly ITeamRepository _teamRepository;
     private readonly ISeasonRepository _seasonRepository;
 
-    // Colors
-    private static readonly XColor HeaderBg = XColor.FromArgb(30, 30, 30);
-    private static readonly XColor AccentColor = XColor.FromArgb(232, 93, 38); // #e85d26
-    private static readonly XColor TextWhite = XColors.White;
-    private static readonly XColor TextGray = XColor.FromArgb(170, 170, 170);
-    private static readonly XColor LineDark = XColor.FromArgb(50, 50, 50);
-    private static readonly XColor PageBg = XColor.FromArgb(15, 15, 15);
+    // Colors — light theme for readable PDFs
+    private static readonly XColor HeaderBg = XColor.FromArgb(232, 93, 38); // #e85d26
+    private static readonly XColor AccentColor = XColor.FromArgb(232, 93, 38);
+    private static readonly XColor TextPrimary = XColor.FromArgb(30, 30, 30);
+    private static readonly XColor TextSecondary = XColor.FromArgb(100, 100, 100);
+    private static readonly XColor TextOnHeader = XColors.White;
+    private static readonly XColor LineDark = XColor.FromArgb(200, 200, 200);
+    private static readonly XColor PageBg = XColors.White;
+    private static readonly XColor TableHeaderBg = XColor.FromArgb(240, 240, 240);
+    private static readonly XColor TableAltRowBg = XColor.FromArgb(248, 248, 248);
 
     // Fonts — created lazily after font resolver is set up
     private static XFont? _titleFont;
@@ -163,7 +166,7 @@ public class PdfReportService
                 var home = teamLookup.GetValueOrDefault(game.HomeTeamId);
                 var away = teamLookup.GetValueOrDefault(game.AwayTeamId);
                 var text = $"{game.GameDate:MMM d}  —  {home?.Abbreviation ?? "?"} vs {away?.Abbreviation ?? "?"}";
-                gfx.DrawString(text, CellFont, new XSolidBrush(TextGray), margin + 5, y + 10);
+                gfx.DrawString(text, CellFont, new XSolidBrush(TextSecondary), margin + 5, y + 10);
                 y += 14;
             }
             y += 10;
@@ -194,15 +197,12 @@ public class PdfReportService
     private static double DrawTitle(XGraphics gfx, string title, string subtitle,
         double x, double y, double width)
     {
-        // Title background
         gfx.DrawRectangle(new XSolidBrush(HeaderBg),
             x, y, width, 50);
-        gfx.DrawRectangle(new XSolidBrush(AccentColor),
-            x, y + 48, width, 2);
 
-        gfx.DrawString(title, TitleFont, new XSolidBrush(TextWhite),
+        gfx.DrawString(title, TitleFont, new XSolidBrush(TextOnHeader),
             new XRect(x, y + 8, width, 25), XStringFormats.Center);
-        gfx.DrawString(subtitle, SubtitleFont, new XSolidBrush(TextGray),
+        gfx.DrawString(subtitle, SubtitleFont, new XSolidBrush(XColor.FromArgb(200, 255, 230, 210)),
             new XRect(x, y + 30, width, 15), XStringFormats.Center);
 
         return y + 55;
@@ -210,36 +210,38 @@ public class PdfReportService
 
     private static double DrawSectionHeader(XGraphics gfx, string text, double x, double y, double width)
     {
-        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(20, 20, 20)),
-            x, y, width, 18);
-        gfx.DrawString(text, SectionFont, new XSolidBrush(AccentColor),
-            x + 6, y + 13);
+        gfx.DrawLine(new XPen(AccentColor, 2), x, y + 16, x + width, y + 16);
+        gfx.DrawString(text, SectionFont, new XSolidBrush(TextPrimary),
+            x + 2, y + 13);
         return y + 22;
     }
 
     private static double DrawBoxScoreTable(XGraphics gfx, List<PlayerBoxLine> lines,
         double x, double y, double tableWidth)
     {
-        // Column widths: #, Player, PTS, FG, 3PT, FT, REB, AST, STL, BLK, TO, PF
         double[] cols = [22, 90, 30, 42, 42, 35, 28, 28, 28, 28, 25, 25];
         string[] headers = ["#", "PLAYER", "PTS", "FG", "3PT", "FT", "REB", "AST", "STL", "BLK", "TO", "PF"];
 
         // Header row
-        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(25, 25, 25)),
-            x, y, tableWidth, 14);
+        gfx.DrawRectangle(new XSolidBrush(TableHeaderBg), x, y, tableWidth, 14);
         double cx = x;
         for (int i = 0; i < headers.Length; i++)
         {
             var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextGray),
+            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextSecondary),
                 new XRect(cx + 2, y, cols[i] - 2, 14), format);
             cx += cols[i];
         }
         y += 14;
 
         // Player rows
+        int rowIndex = 0;
         foreach (var line in lines)
         {
+            // Alternating row background
+            if (rowIndex % 2 == 1)
+                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), x, y, tableWidth, 13);
+
             string[] values =
             [
                 line.JerseyNumber.ToString(),
@@ -260,21 +262,21 @@ public class PdfReportService
             for (int i = 0; i < values.Length; i++)
             {
                 var font = i == 2 ? CellBoldFont : CellFont;
-                var brush = i == 2 ? new XSolidBrush(TextWhite) : new XSolidBrush(TextGray);
+                var brush = i == 2 ? new XSolidBrush(AccentColor) : new XSolidBrush(TextPrimary);
                 var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
                 gfx.DrawString(values[i], font, brush,
                     new XRect(cx + 2, y, cols[i] - 2, 13), format);
                 cx += cols[i];
             }
 
-            // Separator line
             gfx.DrawLine(new XPen(LineDark, 0.5), x, y + 13, x + tableWidth, y + 13);
             y += 13;
+            rowIndex++;
         }
 
         if (lines.Count == 0)
         {
-            gfx.DrawString("No stats recorded", CellFont, new XSolidBrush(TextGray),
+            gfx.DrawString("No stats recorded", CellFont, new XSolidBrush(TextSecondary),
                 new XRect(x, y, tableWidth, 14), XStringFormats.Center);
             y += 14;
         }
@@ -286,6 +288,7 @@ public class PdfReportService
         IReadOnlyList<StatEvent> events, GameBoxScore boxScore,
         double margin, double y, double pageWidth, PdfPage page)
     {
+        int rowIndex = 0;
         foreach (var e in events.OrderBy(ev => ev.Timestamp))
         {
             if (y > page.Height.Point - 40)
@@ -294,20 +297,23 @@ public class PdfReportService
                 page.Width = XUnit.FromInch(8.5);
                 page.Height = XUnit.FromInch(11);
                 gfx = XGraphics.FromPdfPage(page);
-                gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
                 y = 30;
             }
+
+            if (rowIndex % 2 == 1)
+                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), margin, y, pageWidth, 12);
 
             var clock = string.IsNullOrEmpty(e.GameClock) ? "" : $"Q{e.Quarter} {e.GameClock}";
             var desc = FormatStatEvent(e);
 
-            gfx.DrawString(clock, SmallFont, new XSolidBrush(TextGray),
+            gfx.DrawString(clock, SmallFont, new XSolidBrush(TextSecondary),
                 margin + 3, y + 8);
-            gfx.DrawString(desc, CellFont, new XSolidBrush(TextWhite),
+            gfx.DrawString(desc, CellFont, new XSolidBrush(TextPrimary),
                 margin + 60, y + 8);
 
             gfx.DrawLine(new XPen(LineDark, 0.3), margin, y + 11, margin + pageWidth, y + 11);
             y += 12;
+            rowIndex++;
         }
 
         return y;
@@ -320,18 +326,18 @@ public class PdfReportService
         string[] headers = ["#", "PLAYER", "GP", "PPG", "RPG", "APG", "SPG", "BPG", "FG%", "3P%", "FT%"];
 
         // Header row
-        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(25, 25, 25)),
-            margin, y, pageWidth, 14);
+        gfx.DrawRectangle(new XSolidBrush(TableHeaderBg), margin, y, pageWidth, 14);
         double cx = margin;
         for (int i = 0; i < headers.Length; i++)
         {
             var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextGray),
+            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextSecondary),
                 new XRect(cx + 2, y, cols[i] - 2, 14), format);
             cx += cols[i];
         }
         y += 14;
 
+        int rowIndex = 0;
         foreach (var s in stats)
         {
             if (y > page.Height.Point - 40)
@@ -340,9 +346,11 @@ public class PdfReportService
                 page.Width = XUnit.FromInch(8.5);
                 page.Height = XUnit.FromInch(11);
                 gfx = XGraphics.FromPdfPage(page);
-                gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
                 y = 30;
             }
+
+            if (rowIndex % 2 == 1)
+                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), margin, y, pageWidth, 13);
 
             string[] values =
             [
@@ -363,7 +371,7 @@ public class PdfReportService
             for (int i = 0; i < values.Length; i++)
             {
                 var font = i == 3 ? CellBoldFont : CellFont;
-                var brush = i == 3 ? new XSolidBrush(TextWhite) : new XSolidBrush(TextGray);
+                var brush = i == 3 ? new XSolidBrush(AccentColor) : new XSolidBrush(TextPrimary);
                 var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
                 gfx.DrawString(values[i], font, brush,
                     new XRect(cx + 2, y, cols[i] - 2, 13), format);
@@ -372,6 +380,7 @@ public class PdfReportService
 
             gfx.DrawLine(new XPen(LineDark, 0.5), margin, y + 13, margin + pageWidth, y + 13);
             y += 13;
+            rowIndex++;
         }
 
         return y;
