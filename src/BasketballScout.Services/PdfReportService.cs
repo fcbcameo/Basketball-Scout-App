@@ -2,6 +2,7 @@ using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
 using PdfSharp.Drawing;
+using PdfSharp.Fonts;
 using PdfSharp.Pdf;
 
 namespace BasketballScout.Services;
@@ -22,14 +23,40 @@ public class PdfReportService
     private static readonly XColor LineDark = XColor.FromArgb(50, 50, 50);
     private static readonly XColor PageBg = XColor.FromArgb(15, 15, 15);
 
-    // Fonts
-    private static readonly XFont TitleFont = new("Arial", 18, XFontStyleEx.Bold);
-    private static readonly XFont SubtitleFont = new("Arial", 11, XFontStyleEx.Regular);
-    private static readonly XFont SectionFont = new("Arial", 12, XFontStyleEx.Bold);
-    private static readonly XFont HeaderFont = new("Arial", 7, XFontStyleEx.Bold);
-    private static readonly XFont CellFont = new("Arial", 8, XFontStyleEx.Regular);
-    private static readonly XFont CellBoldFont = new("Arial", 8, XFontStyleEx.Bold);
-    private static readonly XFont SmallFont = new("Arial", 6.5, XFontStyleEx.Regular);
+    // Fonts — created lazily after font resolver is set up
+    private static XFont? _titleFont;
+    private static XFont? _subtitleFont;
+    private static XFont? _sectionFont;
+    private static XFont? _headerFont;
+    private static XFont? _cellFont;
+    private static XFont? _cellBoldFont;
+    private static XFont? _smallFont;
+    private static bool _fontsInitialized;
+
+    private static XFont TitleFont => _titleFont ??= new("Arial", 18, XFontStyleEx.Bold);
+    private static XFont SubtitleFont => _subtitleFont ??= new("Arial", 11, XFontStyleEx.Regular);
+    private static XFont SectionFont => _sectionFont ??= new("Arial", 12, XFontStyleEx.Bold);
+    private static XFont HeaderFont => _headerFont ??= new("Arial", 7, XFontStyleEx.Bold);
+    private static XFont CellFont => _cellFont ??= new("Arial", 8, XFontStyleEx.Regular);
+    private static XFont CellBoldFont => _cellBoldFont ??= new("Arial", 8, XFontStyleEx.Bold);
+    private static XFont SmallFont => _smallFont ??= new("Arial", 6.5, XFontStyleEx.Regular);
+
+    private static void EnsureFontResolver()
+    {
+        if (_fontsInitialized) return;
+        try
+        {
+            // Test if default font resolution works (Windows)
+            _ = new XFont("Arial", 10, XFontStyleEx.Regular);
+        }
+        catch
+        {
+            // On mobile platforms, set up our custom resolver
+            if (GlobalFontSettings.FontResolver is null or not MobileFontResolver)
+                GlobalFontSettings.FontResolver = new MobileFontResolver();
+        }
+        _fontsInitialized = true;
+    }
 
     public PdfReportService(
         GameStatsService statsService,
@@ -47,6 +74,7 @@ public class PdfReportService
 
     public async Task<byte[]> GenerateGameReportAsync(int gameId)
     {
+        EnsureFontResolver();
         var boxScore = await _statsService.GetGameBoxScoreAsync(gameId);
         var events = await _statEventRepository.GetByGameIdAsync(gameId);
         var game = await _gameRepository.GetByIdAsync(gameId);
@@ -95,6 +123,7 @@ public class PdfReportService
 
     public async Task<byte[]> GenerateSeasonReportAsync(int seasonId)
     {
+        EnsureFontResolver();
         var season = await _seasonRepository.GetByIdAsync(seasonId);
         var stats = await _statsService.GetSeasonStatsAsync(seasonId);
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
