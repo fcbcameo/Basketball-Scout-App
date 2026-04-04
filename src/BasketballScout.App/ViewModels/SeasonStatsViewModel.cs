@@ -16,8 +16,14 @@ public partial class SeasonStatsViewModel : ObservableObject
     [ObservableProperty]
     public partial int SeasonId { get; set; }
 
+    [ObservableProperty]
+    public partial TeamFilter? SelectedTeamFilter { get; set; }
+
+    public ObservableCollection<TeamFilter> TeamFilters { get; } = [];
     public ObservableCollection<GameSummary> Games { get; } = [];
     public ObservableCollection<PlayerSeasonStats> PlayerStats { get; } = [];
+
+    private List<PlayerSeasonStats> _allStats = [];
 
     public SeasonStatsViewModel(
         GameStatsService statsService,
@@ -34,12 +40,41 @@ public partial class SeasonStatsViewModel : ObservableObject
         if (value > 0) _ = LoadAsync(value);
     }
 
+    partial void OnSelectedTeamFilterChanged(TeamFilter? value)
+    {
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var filtered = SelectedTeamFilter is null || SelectedTeamFilter.TeamId == 0
+            ? _allStats
+            : _allStats.Where(s => s.TeamName == SelectedTeamFilter.TeamName).ToList();
+
+        PlayerStats.Clear();
+        foreach (var s in filtered) PlayerStats.Add(s);
+    }
+
     private async Task LoadAsync(int seasonId)
     {
         // Load games list
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
         var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
         var teamLookup = teams.ToDictionary(t => t.Id);
+
+        // Build team filter list
+        TeamFilters.Clear();
+        TeamFilters.Add(new TeamFilter { TeamId = 0, DisplayName = "All Teams" });
+        foreach (var team in teams)
+        {
+            TeamFilters.Add(new TeamFilter
+            {
+                TeamId = team.Id,
+                TeamName = team.Name,
+                DisplayName = team.Name
+            });
+        }
+        SelectedTeamFilter = TeamFilters[0];
 
         Games.Clear();
         foreach (var game in games.OrderByDescending(g => g.GameDate))
@@ -55,9 +90,8 @@ public partial class SeasonStatsViewModel : ObservableObject
         }
 
         // Load season stats
-        var stats = await _statsService.GetSeasonStatsAsync(seasonId);
-        PlayerStats.Clear();
-        foreach (var s in stats) PlayerStats.Add(s);
+        _allStats = await _statsService.GetSeasonStatsAsync(seasonId);
+        ApplyFilter();
     }
 
     [RelayCommand]
@@ -71,6 +105,15 @@ public partial class SeasonStatsViewModel : ObservableObject
     {
         await Shell.Current.GoToAsync($"{nameof(Views.PlayerStatsPage)}?playerId={player.PlayerId}&seasonId={SeasonId}");
     }
+}
+
+public class TeamFilter
+{
+    public int TeamId { get; set; }
+    public string TeamName { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+
+    public override string ToString() => DisplayName;
 }
 
 public class GameSummary

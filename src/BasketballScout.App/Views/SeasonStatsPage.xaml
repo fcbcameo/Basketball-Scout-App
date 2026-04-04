@@ -52,8 +52,17 @@
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">
                 <VerticalStackLayout Spacing="6">
-                    <Label Text="SEASON STATS" FontSize="10" FontAttributes="Bold"
-                           TextColor="#555" CharacterSpacing="2" />
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <Label Text="SEASON STATS" FontSize="10" FontAttributes="Bold"
+                               TextColor="#555" CharacterSpacing="2" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding TeamFilters}"
+                                SelectedItem="{Binding SelectedTeamFilter}"
+                                TextColor="#ccc"
+                                FontSize="12"
+                                BackgroundColor="#141414"
+                                MinimumWidthRequest="120" />
+                    </Grid>
 
                     <!-- Header -->
                     <Grid ColumnDefinitions="30,*,40,35,35,35,35,40,40,40"
