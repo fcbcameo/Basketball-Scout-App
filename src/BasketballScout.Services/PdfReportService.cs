@@ -44,17 +44,10 @@ public class PdfReportService
     private static void EnsureFontResolver()
     {
         if (_fontsInitialized) return;
-        try
-        {
-            // Test if default font resolution works (Windows)
-            _ = new XFont("Arial", 10, XFontStyleEx.Regular);
-        }
-        catch
-        {
-            // On mobile platforms, set up our custom resolver
-            if (GlobalFontSettings.FontResolver is null or not MobileFontResolver)
-                GlobalFontSettings.FontResolver = new MobileFontResolver();
-        }
+        // The base PDFsharp package has no built-in font resolver on any platform.
+        // We must always set our own.
+        if (GlobalFontSettings.FontResolver is null)
+            GlobalFontSettings.FontResolver = new PlatformFontResolver();
         _fontsInitialized = true;
     }
 
