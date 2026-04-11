@@ -19,6 +19,12 @@ public partial class SeasonStatsViewModel : ObservableObject
     [ObservableProperty]
     public partial TeamFilter? SelectedTeamFilter { get; set; }
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBasic))]
+    public partial bool ShowAdvanced { get; set; }
+
+    public bool ShowBasic => !ShowAdvanced;
+
     public ObservableCollection<TeamFilter> TeamFilters { get; } = [];
     public ObservableCollection<GameSummary> Games { get; } = [];
     public ObservableCollection<PlayerSeasonStats> PlayerStats { get; } = [];

@@ -152,6 +152,26 @@ public partial class GameScoringViewModel : ObservableObject
             if (awayActiveIds.Contains(p.Id)) AwayOnCourt.Add(p);
             else AwayBench.Add(p);
         }
+
+        // Persist starting lineup as SubIn events if this game has no sub events yet.
+        // This lets GameStatsService reconstruct minutes and +/- later.
+        var existing = await _statEventRepository.GetByGameIdAsync(id);
+        bool anySubEvents = existing.Any(e => e.StatType == StatType.SubIn || e.StatType == StatType.SubOut);
+        if (!anySubEvents)
+        {
+            foreach (var p in HomeOnCourt.Concat(AwayOnCourt))
+            {
+                await _statEventRepository.AddAsync(new StatEvent
+                {
+                    GameId = GameId,
+                    PlayerId = p.Id,
+                    StatType = StatType.SubIn,
+                    Quarter = 1,
+                    GameClock = "10:00",
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+        }
     }
 
     // ── Player selection ──
@@ -369,6 +389,17 @@ public partial class GameScoringViewModel : ObservableObject
     private async Task UndoAsync()
     {
         var last = await _statEventRepository.GetLastByGameIdAsync(GameId);
+        // Don't let undo touch sub events (starting lineup, substitutions).
+        while (last is not null && (last.StatType == StatType.SubIn || last.StatType == StatType.SubOut))
+        {
+            // There's no "skip" on the repository, so walk manually.
+            var events = await _statEventRepository.GetByGameIdAsync(GameId);
+            last = events
+                .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
+                .OrderByDescending(e => e.Timestamp)
+                .FirstOrDefault();
+            break;
+        }
         if (last is null) return;
 
         // Reverse score impact
@@ -420,7 +451,7 @@ public partial class GameScoringViewModel : ObservableObject
 
     // ── Substitution ──
     [RelayCommand]
-    private void Substitute(SubstitutionRequest sub)
+    private async Task SubstituteAsync(SubstitutionRequest sub)
     {
         var onCourt = sub.IsHome ? HomeOnCourt : AwayOnCourt;
         var bench = sub.IsHome ? HomeBench : AwayBench;
@@ -431,6 +462,27 @@ public partial class GameScoringViewModel : ObservableObject
             bench.Add(sub.PlayerOut);
             bench.Remove(sub.PlayerIn);
             onCourt.Add(sub.PlayerIn);
+
+            // Persist both events so minutes and +/- can be reconstructed later.
+            var now = DateTime.UtcNow;
+            await _statEventRepository.AddAsync(new StatEvent
+            {
+                GameId = GameId,
+                PlayerId = sub.PlayerOut.Id,
+                StatType = StatType.SubOut,
+                Quarter = Quarter,
+                GameClock = GameClock,
+                Timestamp = now
+            });
+            await _statEventRepository.AddAsync(new StatEvent
+            {
+                GameId = GameId,
+                PlayerId = sub.PlayerIn.Id,
+                StatType = StatType.SubIn,
+                Quarter = Quarter,
+                GameClock = GameClock,
+                Timestamp = now.AddTicks(1)
+            });
 
             AddLog($"SUB: #{sub.PlayerIn.JerseyNumber} in, #{sub.PlayerOut.JerseyNumber} out", sub.IsHome);
         }

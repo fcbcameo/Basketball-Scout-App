@@ -35,8 +35,15 @@ public partial class PlayerStatsViewModel : ObservableObject
     public partial string TeamColor { get; set; } = "#555";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBasic))]
+    public partial bool ShowAdvanced { get; set; }
+
+    public bool ShowBasic => !ShowAdvanced;
+
+    [ObservableProperty]
     public partial int GamesPlayed { get; set; }
 
+    // ── Basic per-game ──
     [ObservableProperty]
     public partial string Ppg { get; set; } = "0.0";
 
@@ -72,6 +79,67 @@ public partial class PlayerStatsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string FtDisplay { get; set; } = "0/0";
+
+    // ── Advanced per-game ──
+    [ObservableProperty]
+    public partial string Mpg { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string Orpg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string Drpg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial double Fg2Pct { get; set; }
+
+    [ObservableProperty]
+    public partial string FgmPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string FgaPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string Fg2MPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string Fg2APg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string Fg3MPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string Fg3APg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string FtmPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string FtaPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial double EFgPct { get; set; }
+
+    [ObservableProperty]
+    public partial double TsPct { get; set; }
+
+    [ObservableProperty]
+    public partial string TsaPg { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string AtDisplay { get; set; } = "0.00";
+
+    [ObservableProperty]
+    public partial string EffDisplay { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string GmScDisplay { get; set; } = "0.0";
+
+    [ObservableProperty]
+    public partial string PlusMinusDisplay { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string TotalMinutesDisplay { get; set; } = "—";
 
     public ObservableCollection<ShotChartPoint> ShotChart { get; } = [];
 
@@ -138,6 +206,28 @@ public partial class PlayerStatsViewModel : ObservableObject
             FgDisplay = $"{ps.FgMade}/{ps.FgAttempted}";
             Fg3Display = $"{ps.Fg3Made}/{ps.Fg3Attempted}";
             FtDisplay = $"{ps.FtMade}/{ps.FtAttempted}";
+
+            // Advanced
+            Mpg = ps.MpgDisplay;
+            Orpg = ps.Orpg;
+            Drpg = ps.Drpg;
+            Fg2Pct = ps.Fg2Pct;
+            FgmPg = ps.FgmPg;
+            FgaPg = ps.FgaPg;
+            Fg2MPg = ps.Fg2MPg;
+            Fg2APg = ps.Fg2APg;
+            Fg3MPg = ps.Fg3MPg;
+            Fg3APg = ps.Fg3APg;
+            FtmPg = ps.FtmPg;
+            FtaPg = ps.FtaPg;
+            EFgPct = ps.EFgPct;
+            TsPct = ps.TsPct;
+            TsaPg = ps.TsaPg;
+            AtDisplay = ps.AtDisplay;
+            EffDisplay = ps.EffDisplay;
+            GmScDisplay = ps.GmScDisplay;
+            PlusMinusDisplay = ps.PlusMinusDisplay;
+            TotalMinutesDisplay = ps.TotalMinutesDisplay;
         }
 
         // Load shot chart
