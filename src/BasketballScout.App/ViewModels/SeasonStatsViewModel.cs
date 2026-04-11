@@ -114,10 +114,10 @@ public partial class SeasonStatsViewModel : ObservableObject
             var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
             await File.WriteAllBytesAsync(filePath, pdfBytes);
 
-            await Share.Default.RequestAsync(new ShareFileRequest
+            await Launcher.Default.OpenAsync(new OpenFileRequest
             {
                 Title = "Season Report",
-                File = new ShareFile(filePath)
+                File = new ReadOnlyFile(filePath)
             });
         }
         catch (Exception ex)

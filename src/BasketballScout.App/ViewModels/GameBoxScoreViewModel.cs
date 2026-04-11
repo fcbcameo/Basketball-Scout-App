@@ -41,20 +41,29 @@ public partial class GameBoxScoreViewModel : ObservableObject
         try
         {
             var pdfBytes = await _pdfService.GenerateGameReportAsync(GameId);
-            var fileName = $"GameReport_{HomeTeamName}_vs_{AwayTeamName}_{GameDateDisplay.Replace(" ", "").Replace(",", "")}.pdf";
+            var safeHome = MakeFileSafe(HomeTeamName);
+            var safeAway = MakeFileSafe(AwayTeamName);
+            var fileName = $"GameReport_{safeHome}_vs_{safeAway}_{GameDateDisplay.Replace(" ", "").Replace(",", "")}.pdf";
             var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
             await File.WriteAllBytesAsync(filePath, pdfBytes);
 
-            await Share.Default.RequestAsync(new ShareFileRequest
+            await Launcher.Default.OpenAsync(new OpenFileRequest
             {
                 Title = $"Game Report - {ScoreDisplay}",
-                File = new ShareFile(filePath)
+                File = new ReadOnlyFile(filePath)
             });
         }
         catch (Exception ex)
         {
             await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
         }
+    }
+
+    private static string MakeFileSafe(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
     }
 
     partial void OnGameIdChanged(int value)
