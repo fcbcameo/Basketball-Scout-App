@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BasketballScout.App.Views.AboutPage"
+             Title="About">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16" HorizontalOptions="Fill">
+
+            <!-- Basketball icon -->
+            <Grid HeightRequest="120" WidthRequest="120"
+                  HorizontalOptions="Center"
+                  Margin="0,16,0,0">
+                <Ellipse Fill="#e85d26"
+                         WidthRequest="120" HeightRequest="120" />
+                <Line X1="60" Y1="10" X2="60" Y2="110"
+                      Stroke="#0f172a" StrokeThickness="4" />
+                <Line X1="10" Y1="60" X2="110" Y2="60"
+                      Stroke="#0f172a" StrokeThickness="4" />
+            </Grid>
+
+            <Label Text="Basketball Scout"
+                   FontSize="28"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center" />
+
+            <Label x:Name="VersionLabel"
+                   FontSize="14"
+                   TextColor="{AppThemeBinding Light=#666, Dark=#999}"
+                   HorizontalTextAlignment="Center" />
+
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                     Margin="0,12" />
+
+            <Label Text="Live basketball game scouting and stat tracking."
+                   FontSize="15"
+                   HorizontalTextAlignment="Center" />
+
+            <Label Text="Court-first scoring, offline-first, zero cloud costs."
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light=#666, Dark=#999}"
+                   HorizontalTextAlignment="Center" />
+
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                     Margin="0,12" />
+
+            <Label Text="Features"
+                   FontSize="16"
+                   FontAttributes="Bold" />
+            <Label Text="• Team and roster management"
+                   FontSize="14" />
+            <Label Text="• Live game scoring with shot chart"
+                   FontSize="14" />
+            <Label Text="• Box scores and season averages"
+                   FontSize="14" />
+            <Label Text="• PDF match and season reports"
+                   FontSize="14" />
+            <Label Text="• JSON season import and export"
+                   FontSize="14" />
+
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                     Margin="0,12" />
+
+            <Label Text="© Michiel Cornelissis"
+                   FontSize="12"
+                   TextColor="{AppThemeBinding Light=#888, Dark=#777}"
+                   HorizontalTextAlignment="Center" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

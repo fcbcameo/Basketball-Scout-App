@@ -7,9 +7,14 @@
              x:DataType="vm:SeasonOverviewViewModel"
              Title="Seasons">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="About"
+                     Command="{Binding ShowAboutCommand}" />
+    </ContentPage.ToolbarItems>
+
     <Grid RowDefinitions="Auto,*" Padding="16">
         <Grid ColumnDefinitions="*,Auto">
-            <Label Text="BasketballScout"
+            <Label Text="Basketball Scout"
                    FontSize="24"
                    FontAttributes="Bold"
                    VerticalOptions="Center" />

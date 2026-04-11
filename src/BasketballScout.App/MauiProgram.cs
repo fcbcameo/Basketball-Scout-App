@@ -62,6 +62,7 @@ public static class MauiProgram
         builder.Services.AddTransient<GameBoxScorePage>();
         builder.Services.AddTransient<SeasonStatsPage>();
         builder.Services.AddTransient<PlayerStatsPage>();
+        builder.Services.AddTransient<AboutPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

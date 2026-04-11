@@ -52,6 +52,12 @@ public partial class SeasonOverviewViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ShowAboutAsync()
+    {
+        await Shell.Current.GoToAsync(nameof(Views.AboutPage));
+    }
+
+    [RelayCommand]
     private async Task DeleteSeasonAsync(Season season)
     {
         bool confirm = await Shell.Current.DisplayAlertAsync(
