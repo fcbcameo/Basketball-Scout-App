@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace BasketballScout.App.ViewModels;
 
@@ -8,6 +9,7 @@ namespace BasketballScout.App.ViewModels;
 public partial class GameBoxScoreViewModel : ObservableObject
 {
     private readonly GameStatsService _statsService;
+    private readonly PdfReportService _pdfService;
 
     [ObservableProperty]
     public partial int GameId { get; set; }
@@ -27,9 +29,41 @@ public partial class GameBoxScoreViewModel : ObservableObject
     public ObservableCollection<PlayerBoxLine> HomeLines { get; } = [];
     public ObservableCollection<PlayerBoxLine> AwayLines { get; } = [];
 
-    public GameBoxScoreViewModel(GameStatsService statsService)
+    public GameBoxScoreViewModel(GameStatsService statsService, PdfReportService pdfService)
     {
         _statsService = statsService;
+        _pdfService = pdfService;
+    }
+
+    [RelayCommand]
+    private async Task SharePdfAsync()
+    {
+        try
+        {
+            var pdfBytes = await _pdfService.GenerateGameReportAsync(GameId);
+            var safeHome = MakeFileSafe(HomeTeamName);
+            var safeAway = MakeFileSafe(AwayTeamName);
+            var fileName = $"GameReport_{safeHome}_vs_{safeAway}_{GameDateDisplay.Replace(" ", "").Replace(",", "")}.pdf";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
+
+            await Launcher.Default.OpenAsync(new OpenFileRequest
+            {
+                Title = $"Game Report - {ScoreDisplay}",
+                File = new ReadOnlyFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
+        }
+    }
+
+    private static string MakeFileSafe(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
     }
 
     partial void OnGameIdChanged(int value)

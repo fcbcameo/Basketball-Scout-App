@@ -11,6 +11,15 @@
     <ScrollView>
         <VerticalStackLayout Padding="12" Spacing="12">
 
+            <!-- Share PDF Button -->
+            <Button Text="Share Season Report PDF"
+                    Command="{Binding SharePdfCommand}"
+                    BackgroundColor="#e85d26"
+                    TextColor="White"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    HeightRequest="42" />
+
             <!-- Games Section -->
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">

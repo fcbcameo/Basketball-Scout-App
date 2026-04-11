@@ -25,14 +25,18 @@ public partial class SeasonStatsViewModel : ObservableObject
 
     private List<PlayerSeasonStats> _allStats = [];
 
+    private readonly PdfReportService _pdfService;
+
     public SeasonStatsViewModel(
         GameStatsService statsService,
         IGameRepository gameRepository,
-        ITeamRepository teamRepository)
+        ITeamRepository teamRepository,
+        PdfReportService pdfService)
     {
         _statsService = statsService;
         _gameRepository = gameRepository;
         _teamRepository = teamRepository;
+        _pdfService = pdfService;
     }
 
     partial void OnSeasonIdChanged(int value)
@@ -98,6 +102,28 @@ public partial class SeasonStatsViewModel : ObservableObject
     private async Task ViewGameAsync(GameSummary game)
     {
         await Shell.Current.GoToAsync($"{nameof(Views.GameBoxScorePage)}?gameId={game.GameId}");
+    }
+
+    [RelayCommand]
+    private async Task SharePdfAsync()
+    {
+        try
+        {
+            var pdfBytes = await _pdfService.GenerateSeasonReportAsync(SeasonId);
+            var fileName = $"SeasonReport_{SeasonId}.pdf";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
+
+            await Launcher.Default.OpenAsync(new OpenFileRequest
+            {
+                Title = "Season Report",
+                File = new ReadOnlyFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
+        }
     }
 
     [RelayCommand]
