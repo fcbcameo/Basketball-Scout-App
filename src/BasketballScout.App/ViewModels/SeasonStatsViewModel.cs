@@ -115,8 +115,15 @@ public partial class SeasonStatsViewModel : ObservableObject
     {
         try
         {
-            var pdfBytes = await _pdfService.GenerateSeasonReportAsync(SeasonId);
-            var fileName = $"SeasonReport_{SeasonId}.pdf";
+            // If a specific team is selected (TeamId > 0), the PDF is scoped to that team.
+            int? filterTeamId = SelectedTeamFilter is { TeamId: > 0 } tf ? tf.TeamId : null;
+
+            var pdfBytes = await _pdfService.GenerateSeasonReportAsync(SeasonId, filterTeamId);
+
+            var teamSuffix = filterTeamId is not null && SelectedTeamFilter is not null
+                ? $"_{MakeFileSafe(SelectedTeamFilter.TeamName)}"
+                : string.Empty;
+            var fileName = $"SeasonReport_{SeasonId}{teamSuffix}.pdf";
             var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
             await File.WriteAllBytesAsync(filePath, pdfBytes);
 
@@ -130,6 +137,13 @@ public partial class SeasonStatsViewModel : ObservableObject
         {
             await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
         }
+    }
+
+    private static string MakeFileSafe(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
     }
 
     [RelayCommand]

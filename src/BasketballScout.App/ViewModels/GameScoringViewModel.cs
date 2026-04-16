@@ -39,6 +39,16 @@ public partial class GameScoringViewModel : ObservableObject
     [ObservableProperty]
     public partial string GameClock { get; set; } = "10:00";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClockColor))]
+    public partial bool IsClockRunning { get; set; }
+
+    public string ClockColor => IsClockRunning ? "#4ade80" : "#ddd";
+
+    private const int QuarterLengthSeconds = 600;
+    private int _clockSeconds = QuarterLengthSeconds;
+    private readonly System.Timers.Timer _clockTimer = new(1000) { AutoReset = true };
+
     // ── Teams ──
     [ObservableProperty]
     public partial string HomeTeamName { get; set; } = string.Empty;
@@ -84,10 +94,35 @@ public partial class GameScoringViewModel : ObservableObject
     public ObservableCollection<Player> FollowUpCandidates { get; } = new();
 
     // ── Query property helpers ──
-    public string HomeActiveIdsString { set => _homeActiveIdsParsed = value; }
-    public string AwayActiveIdsString { set => _awayActiveIdsParsed = value; }
+    // All three query properties must be applied before we can hydrate the rosters,
+    // because the home/away active-id strings arrive *after* GameId. Guard with flags
+    // and only call LoadGameAsync once everything is in place.
+    public string HomeActiveIdsString
+    {
+        set
+        {
+            _homeActiveIdsParsed = value;
+            _homeIdsSet = true;
+            TryLoad();
+        }
+    }
+
+    public string AwayActiveIdsString
+    {
+        set
+        {
+            _awayActiveIdsParsed = value;
+            _awayIdsSet = true;
+            TryLoad();
+        }
+    }
+
     private string _homeActiveIdsParsed = string.Empty;
     private string _awayActiveIdsParsed = string.Empty;
+    private bool _gameIdSet;
+    private bool _homeIdsSet;
+    private bool _awayIdsSet;
+    private bool _loaded;
 
     private List<Player> _allHomePlayers = new();
     private List<Player> _allAwayPlayers = new();
@@ -102,11 +137,22 @@ public partial class GameScoringViewModel : ObservableObject
         _statEventRepository = statEventRepository;
         _playerRepository = playerRepository;
         _teamRepository = teamRepository;
+
+        _clockTimer.Elapsed += (_, _) => MainThread.BeginInvokeOnMainThread(OnClockTick);
     }
 
     partial void OnGameIdChanged(int value)
     {
-        if (value > 0) _ = LoadGameAsync(value);
+        _gameIdSet = value > 0;
+        TryLoad();
+    }
+
+    private void TryLoad()
+    {
+        if (_loaded) return;
+        if (!_gameIdSet || !_homeIdsSet || !_awayIdsSet) return;
+        _loaded = true;
+        _ = LoadGameAsync(GameId);
     }
 
     private async Task LoadGameAsync(int id)
@@ -445,9 +491,47 @@ public partial class GameScoringViewModel : ObservableObject
         if (Quarter < 6) // up to 2 OT
         {
             Quarter++;
-            GameClock = "10:00";
+            StopClock();
+            _clockSeconds = QuarterLengthSeconds;
+            GameClock = FormatClock(_clockSeconds);
         }
     }
+
+    // ── Game clock ──
+    [RelayCommand]
+    private void ToggleClock()
+    {
+        if (IsClockRunning) StopClock();
+        else StartClock();
+    }
+
+    private void StartClock()
+    {
+        if (_clockSeconds <= 0) return;
+        _clockTimer.Start();
+        IsClockRunning = true;
+    }
+
+    private void StopClock()
+    {
+        _clockTimer.Stop();
+        IsClockRunning = false;
+    }
+
+    private void OnClockTick()
+    {
+        if (_clockSeconds <= 0)
+        {
+            StopClock();
+            return;
+        }
+        _clockSeconds--;
+        GameClock = FormatClock(_clockSeconds);
+        if (_clockSeconds <= 0) StopClock();
+    }
+
+    private static string FormatClock(int seconds) =>
+        $"{seconds / 60}:{seconds % 60:D2}";
 
     // ── Substitution ──
     [RelayCommand]

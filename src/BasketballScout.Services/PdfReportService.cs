@@ -92,7 +92,7 @@ public class PdfReportService
         ctx.Y += 10;
 
         // Away team — same layout
-        EnsureSpace(ref ctx, doc, 120);
+        EnsureSpace(ctx, doc, 120);
         ctx.Y = DrawSectionHeader(ctx.Gfx, boxScore.AwayTeamName, Margin, ctx.Y, pageWidth);
         DrawGameBasicTable(ctx, boxScore.AwayLines, pageWidth, doc);
         DrawGameShootingTable(ctx, boxScore.AwayLines, pageWidth, doc);
@@ -105,9 +105,9 @@ public class PdfReportService
             .ToList();
         if (nonSub.Count > 0)
         {
-            EnsureSpace(ref ctx, doc, 40);
+            EnsureSpace(ctx, doc, 40);
             ctx.Y = DrawSectionHeader(ctx.Gfx, "PLAY-BY-PLAY", Margin, ctx.Y, pageWidth);
-            DrawPlayByPlay(ref ctx, doc, nonSub, pageWidth);
+            DrawPlayByPlay(ctx, doc, nonSub, pageWidth);
         }
 
         using var stream = new MemoryStream();
@@ -117,33 +117,50 @@ public class PdfReportService
 
     // ── Season Report ────────────────────────────────────────────────────────
 
-    public async Task<byte[]> GenerateSeasonReportAsync(int seasonId)
+    public async Task<byte[]> GenerateSeasonReportAsync(int seasonId, int? teamId = null)
     {
         var season = await _seasonRepository.GetByIdAsync(seasonId);
         var stats = await _statsService.GetSeasonStatsAsync(seasonId);
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
         var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
 
+        // Optional single-team filter
+        List<Team> reportTeams = teams.ToList();
+        List<Game> reportGames = games.ToList();
+        if (teamId is int tid && tid > 0)
+        {
+            reportTeams = reportTeams.Where(t => t.Id == tid).ToList();
+            reportGames = reportGames
+                .Where(g => g.HomeTeamId == tid || g.AwayTeamId == tid)
+                .ToList();
+        }
+
         var doc = new PdfDocument();
-        doc.Info.Title = $"Season Report - {season?.Name ?? "Season"}";
+        var singleTeamName = reportTeams.Count == 1 ? reportTeams[0].Name : null;
+        doc.Info.Title = singleTeamName is not null
+            ? $"Season Report - {singleTeamName} - {season?.Name ?? "Season"}"
+            : $"Season Report - {season?.Name ?? "Season"}";
 
         var ctx = NewPage(doc);
         double pageWidth = ctx.Page.Width.Point - Margin * 2;
 
         // Title
+        var titleText = singleTeamName is not null
+            ? $"{season?.Name ?? "Season"} — {singleTeamName}"
+            : season?.Name ?? "Season Report";
         ctx.Y = DrawTitle(ctx.Gfx,
-            season?.Name ?? "Season Report",
-            $"{games.Count} games played",
+            titleText,
+            $"{reportGames.Count} games played",
             Margin, ctx.Y, pageWidth);
         ctx.Y += 5;
 
         // One set of 3 tables per team
-        foreach (var team in teams)
+        foreach (var team in reportTeams)
         {
             var teamStats = stats.Where(s => s.TeamName == team.Name).ToList();
             if (teamStats.Count == 0) continue;
 
-            EnsureSpace(ref ctx, doc, 140);
+            EnsureSpace(ctx, doc, 140);
             ctx.Y = DrawSectionHeader(ctx.Gfx, team.Name.ToUpper(), Margin, ctx.Y, pageWidth);
 
             DrawSeasonBasicTable(ctx, teamStats, pageWidth, doc);
@@ -153,14 +170,14 @@ public class PdfReportService
         }
 
         // Games list
-        if (games.Count > 0)
+        if (reportGames.Count > 0)
         {
-            EnsureSpace(ref ctx, doc, 80);
+            EnsureSpace(ctx, doc, 80);
             ctx.Y = DrawSectionHeader(ctx.Gfx, "GAMES", Margin, ctx.Y, pageWidth);
             var teamLookup = teams.ToDictionary(t => t.Id);
-            foreach (var g in games.OrderByDescending(g => g.GameDate))
+            foreach (var g in reportGames.OrderByDescending(g => g.GameDate))
             {
-                EnsureSpace(ref ctx, doc, 20);
+                EnsureSpace(ctx, doc, 20);
                 var home = teamLookup.GetValueOrDefault(g.HomeTeamId);
                 var away = teamLookup.GetValueOrDefault(g.AwayTeamId);
                 var text = $"{g.GameDate:MMM d}  —  {home?.Abbreviation ?? "?"} vs {away?.Abbreviation ?? "?"}";
@@ -185,19 +202,30 @@ public class PdfReportService
 
     private static PageContext NewPage(PdfDocument doc)
     {
+        var ctx = new PageContext();
+        AdvanceToNewPage(ctx, doc);
+        return ctx;
+    }
+
+    // Mutates ctx in-place so callers that hold the same PageContext reference
+    // (e.g. helpers invoked without `ref`) see the page flip.
+    private static void AdvanceToNewPage(PageContext ctx, PdfDocument doc)
+    {
         var page = doc.AddPage();
         page.Width = XUnit.FromInch(PageWidthInches);
         page.Height = XUnit.FromInch(PageHeightInches);
         var gfx = XGraphics.FromPdfPage(page);
         gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
-        return new PageContext { Page = page, Gfx = gfx, Y = 30 };
+        ctx.Page = page;
+        ctx.Gfx = gfx;
+        ctx.Y = 30;
     }
 
-    private static void EnsureSpace(ref PageContext ctx, PdfDocument doc, double needed)
+    private static void EnsureSpace(PageContext ctx, PdfDocument doc, double needed)
     {
         if (ctx.Y + needed > ctx.Page.Height.Point - Margin)
         {
-            ctx = NewPage(doc);
+            AdvanceToNewPage(ctx, doc);
         }
     }
 
@@ -243,7 +271,7 @@ public class PdfReportService
         double tableWidth = cols.Sum();
         double x = Margin;
 
-        EnsureSpace(ref ctx, doc, 30 + rows.Count * 13);
+        EnsureSpace(ctx, doc, 30 + rows.Count * 13);
 
         // Label
         DrawTableLabel(ctx, label);
@@ -264,7 +292,7 @@ public class PdfReportService
         int rowIndex = 0;
         foreach (var row in rows)
         {
-            EnsureSpace(ref ctx, doc, 15);
+            EnsureSpace(ctx, doc, 15);
             if (rowIndex % 2 == 1)
                 ctx.Gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), x, ctx.Y, tableWidth, 13);
 
@@ -436,13 +464,13 @@ public class PdfReportService
 
     // ── Play-by-play ─────────────────────────────────────────────────────────
 
-    private static void DrawPlayByPlay(ref PageContext ctx, PdfDocument doc,
+    private static void DrawPlayByPlay(PageContext ctx, PdfDocument doc,
         IReadOnlyList<StatEvent> events, double pageWidth)
     {
         int rowIndex = 0;
         foreach (var e in events.OrderBy(ev => ev.Timestamp))
         {
-            EnsureSpace(ref ctx, doc, 14);
+            EnsureSpace(ctx, doc, 14);
             if (rowIndex % 2 == 1)
                 ctx.Gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), Margin, ctx.Y, pageWidth, 12);
 
