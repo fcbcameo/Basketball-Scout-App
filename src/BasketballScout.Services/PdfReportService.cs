@@ -25,10 +25,16 @@ public class PdfReportService
     private static readonly XColor TableHeaderBg = XColor.FromArgb(240, 240, 240);
     private static readonly XColor TableAltRowBg = XColor.FromArgb(248, 248, 248);
 
+    // Landscape letter: 11" × 8.5"
+    private const double PageWidthInches = 11;
+    private const double PageHeightInches = 8.5;
+    private const double Margin = 30;
+
     // Fonts — PdfSharpCore handles font resolution via SixLabors.Fonts
     private static XFont? _titleFont;
     private static XFont? _subtitleFont;
     private static XFont? _sectionFont;
+    private static XFont? _tableLabelFont;
     private static XFont? _headerFont;
     private static XFont? _cellFont;
     private static XFont? _cellBoldFont;
@@ -37,6 +43,7 @@ public class PdfReportService
     private static XFont TitleFont => _titleFont ??= new("Arial", 18, XFontStyle.Bold);
     private static XFont SubtitleFont => _subtitleFont ??= new("Arial", 11, XFontStyle.Regular);
     private static XFont SectionFont => _sectionFont ??= new("Arial", 12, XFontStyle.Bold);
+    private static XFont TableLabelFont => _tableLabelFont ??= new("Arial", 9, XFontStyle.Bold);
     private static XFont HeaderFont => _headerFont ??= new("Arial", 7, XFontStyle.Bold);
     private static XFont CellFont => _cellFont ??= new("Arial", 8, XFontStyle.Regular);
     private static XFont CellBoldFont => _cellBoldFont ??= new("Arial", 8, XFontStyle.Bold);
@@ -56,9 +63,10 @@ public class PdfReportService
         _seasonRepository = seasonRepository;
     }
 
+    // ── Game Report ──────────────────────────────────────────────────────────
+
     public async Task<byte[]> GenerateGameReportAsync(int gameId)
     {
-
         var boxScore = await _statsService.GetGameBoxScoreAsync(gameId);
         var events = await _statEventRepository.GetByGameIdAsync(gameId);
         var game = await _gameRepository.GetByIdAsync(gameId);
@@ -66,38 +74,40 @@ public class PdfReportService
         var doc = new PdfDocument();
         doc.Info.Title = $"Game Report - {boxScore.HomeTeamName} vs {boxScore.AwayTeamName}";
 
-        var page = doc.AddPage();
-        page.Width = XUnit.FromInch(8.5);
-        page.Height = XUnit.FromInch(11);
-        var gfx = XGraphics.FromPdfPage(page);
-
-        double y = 30;
-        double margin = 30;
-        double pageWidth = page.Width.Point - margin * 2;
-
-        // Background
-        gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
+        var ctx = NewPage(doc);
+        double pageWidth = ctx.Page.Width.Point - Margin * 2;
 
         // Title
-        y = DrawTitle(gfx, $"{boxScore.HomeTeamAbbr} {boxScore.HomeScore} - {boxScore.AwayScore} {boxScore.AwayTeamAbbr}",
-            game?.GameDate.ToString("MMMM d, yyyy") ?? "", margin, y, pageWidth);
-        y += 5;
+        ctx.Y = DrawTitle(ctx.Gfx,
+            $"{boxScore.HomeTeamAbbr} {boxScore.HomeScore} - {boxScore.AwayScore} {boxScore.AwayTeamAbbr}",
+            game?.GameDate.ToString("MMMM d, yyyy") ?? "",
+            Margin, ctx.Y, pageWidth);
+        ctx.Y += 5;
 
-        // Home team box score
-        y = DrawSectionHeader(gfx, boxScore.HomeTeamName, margin, y, pageWidth);
-        y = DrawBoxScoreTable(gfx, boxScore.HomeLines, margin, y, pageWidth);
-        y += 10;
+        // Home team — 3 stacked advanced tables
+        ctx.Y = DrawSectionHeader(ctx.Gfx, boxScore.HomeTeamName, Margin, ctx.Y, pageWidth);
+        DrawGameBasicTable(ctx, boxScore.HomeLines, pageWidth, doc);
+        DrawGameShootingTable(ctx, boxScore.HomeLines, pageWidth, doc);
+        DrawGameAdvancedTable(ctx, boxScore.HomeLines, pageWidth, doc);
+        ctx.Y += 10;
 
-        // Away team box score
-        y = DrawSectionHeader(gfx, boxScore.AwayTeamName, margin, y, pageWidth);
-        y = DrawBoxScoreTable(gfx, boxScore.AwayLines, margin, y, pageWidth);
-        y += 15;
+        // Away team — same layout
+        EnsureSpace(ctx, doc, 120);
+        ctx.Y = DrawSectionHeader(ctx.Gfx, boxScore.AwayTeamName, Margin, ctx.Y, pageWidth);
+        DrawGameBasicTable(ctx, boxScore.AwayLines, pageWidth, doc);
+        DrawGameShootingTable(ctx, boxScore.AwayLines, pageWidth, doc);
+        DrawGameAdvancedTable(ctx, boxScore.AwayLines, pageWidth, doc);
+        ctx.Y += 15;
 
         // Play-by-play
-        if (events.Count > 0)
+        var nonSub = events
+            .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
+            .ToList();
+        if (nonSub.Count > 0)
         {
-            y = DrawSectionHeader(gfx, "PLAY-BY-PLAY", margin, y, pageWidth);
-            y = DrawPlayByPlay(gfx, doc, events, boxScore, margin, y, pageWidth, page);
+            EnsureSpace(ctx, doc, 40);
+            ctx.Y = DrawSectionHeader(ctx.Gfx, "PLAY-BY-PLAY", Margin, ctx.Y, pageWidth);
+            DrawPlayByPlay(ctx, doc, nonSub, pageWidth);
         }
 
         using var stream = new MemoryStream();
@@ -105,76 +115,75 @@ public class PdfReportService
         return stream.ToArray();
     }
 
-    public async Task<byte[]> GenerateSeasonReportAsync(int seasonId)
-    {
+    // ── Season Report ────────────────────────────────────────────────────────
 
+    public async Task<byte[]> GenerateSeasonReportAsync(int seasonId, int? teamId = null)
+    {
         var season = await _seasonRepository.GetByIdAsync(seasonId);
         var stats = await _statsService.GetSeasonStatsAsync(seasonId);
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
         var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
 
-        var doc = new PdfDocument();
-        doc.Info.Title = $"Season Report - {season?.Name ?? "Season"}";
-
-        var page = doc.AddPage();
-        page.Width = XUnit.FromInch(8.5);
-        page.Height = XUnit.FromInch(11);
-        var gfx = XGraphics.FromPdfPage(page);
-
-        double y = 30;
-        double margin = 30;
-        double pageWidth = page.Width.Point - margin * 2;
-
-        // Background
-        gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
-
-        // Title
-        y = DrawTitle(gfx, season?.Name ?? "Season Report",
-            $"{games.Count} games played", margin, y, pageWidth);
-        y += 5;
-
-        // Games list
-        if (games.Count > 0)
+        // Optional single-team filter
+        List<Team> reportTeams = teams.ToList();
+        List<Game> reportGames = games.ToList();
+        if (teamId is int tid && tid > 0)
         {
-            var teamLookup = teams.ToDictionary(t => t.Id);
-            y = DrawSectionHeader(gfx, "GAMES", margin, y, pageWidth);
-
-            foreach (var game in games.OrderByDescending(g => g.GameDate))
-            {
-                if (y > page.Height.Point - 50)
-                {
-                    page = doc.AddPage();
-                    page.Width = XUnit.FromInch(8.5);
-                    page.Height = XUnit.FromInch(11);
-                    gfx = XGraphics.FromPdfPage(page);
-                    gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
-                    y = 30;
-                }
-
-                var home = teamLookup.GetValueOrDefault(game.HomeTeamId);
-                var away = teamLookup.GetValueOrDefault(game.AwayTeamId);
-                var text = $"{game.GameDate:MMM d}  —  {home?.Abbreviation ?? "?"} vs {away?.Abbreviation ?? "?"}";
-                gfx.DrawString(text, CellFont, new XSolidBrush(TextSecondary), margin + 5, y + 10);
-                y += 14;
-            }
-            y += 10;
+            reportTeams = reportTeams.Where(t => t.Id == tid).ToList();
+            reportGames = reportGames
+                .Where(g => g.HomeTeamId == tid || g.AwayTeamId == tid)
+                .ToList();
         }
 
-        // Season stats table
-        if (stats.Count > 0)
-        {
-            if (y > page.Height.Point - 120)
-            {
-                page = doc.AddPage();
-                page.Width = XUnit.FromInch(8.5);
-                page.Height = XUnit.FromInch(11);
-                gfx = XGraphics.FromPdfPage(page);
-                gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
-                y = 30;
-            }
+        var doc = new PdfDocument();
+        var singleTeamName = reportTeams.Count == 1 ? reportTeams[0].Name : null;
+        doc.Info.Title = singleTeamName is not null
+            ? $"Season Report - {singleTeamName} - {season?.Name ?? "Season"}"
+            : $"Season Report - {season?.Name ?? "Season"}";
 
-            y = DrawSectionHeader(gfx, "SEASON AVERAGES", margin, y, pageWidth);
-            y = DrawSeasonStatsTable(gfx, doc, stats, margin, y, pageWidth, page);
+        var ctx = NewPage(doc);
+        double pageWidth = ctx.Page.Width.Point - Margin * 2;
+
+        // Title
+        var titleText = singleTeamName is not null
+            ? $"{season?.Name ?? "Season"} — {singleTeamName}"
+            : season?.Name ?? "Season Report";
+        ctx.Y = DrawTitle(ctx.Gfx,
+            titleText,
+            $"{reportGames.Count} games played",
+            Margin, ctx.Y, pageWidth);
+        ctx.Y += 5;
+
+        // One set of 3 tables per team
+        foreach (var team in reportTeams)
+        {
+            var teamStats = stats.Where(s => s.TeamName == team.Name).ToList();
+            if (teamStats.Count == 0) continue;
+
+            EnsureSpace(ctx, doc, 140);
+            ctx.Y = DrawSectionHeader(ctx.Gfx, team.Name.ToUpper(), Margin, ctx.Y, pageWidth);
+
+            DrawSeasonBasicTable(ctx, teamStats, pageWidth, doc);
+            DrawSeasonShootingTable(ctx, teamStats, pageWidth, doc);
+            DrawSeasonAdvancedTable(ctx, teamStats, pageWidth, doc);
+            ctx.Y += 12;
+        }
+
+        // Games list
+        if (reportGames.Count > 0)
+        {
+            EnsureSpace(ctx, doc, 80);
+            ctx.Y = DrawSectionHeader(ctx.Gfx, "GAMES", Margin, ctx.Y, pageWidth);
+            var teamLookup = teams.ToDictionary(t => t.Id);
+            foreach (var g in reportGames.OrderByDescending(g => g.GameDate))
+            {
+                EnsureSpace(ctx, doc, 20);
+                var home = teamLookup.GetValueOrDefault(g.HomeTeamId);
+                var away = teamLookup.GetValueOrDefault(g.AwayTeamId);
+                var text = $"{g.GameDate:MMM d}  —  {home?.Abbreviation ?? "?"} vs {away?.Abbreviation ?? "?"}";
+                ctx.Gfx.DrawString(text, CellFont, new XSolidBrush(TextSecondary), Margin + 5, ctx.Y + 10);
+                ctx.Y += 14;
+            }
         }
 
         using var stream = new MemoryStream();
@@ -182,196 +191,301 @@ public class PdfReportService
         return stream.ToArray();
     }
 
+    // ── Page helpers ─────────────────────────────────────────────────────────
+
+    private class PageContext
+    {
+        public PdfPage Page = null!;
+        public XGraphics Gfx = null!;
+        public double Y;
+    }
+
+    private static PageContext NewPage(PdfDocument doc)
+    {
+        var ctx = new PageContext();
+        AdvanceToNewPage(ctx, doc);
+        return ctx;
+    }
+
+    // Mutates ctx in-place so callers that hold the same PageContext reference
+    // (e.g. helpers invoked without `ref`) see the page flip.
+    private static void AdvanceToNewPage(PageContext ctx, PdfDocument doc)
+    {
+        var page = doc.AddPage();
+        page.Width = XUnit.FromInch(PageWidthInches);
+        page.Height = XUnit.FromInch(PageHeightInches);
+        var gfx = XGraphics.FromPdfPage(page);
+        gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, page.Width.Point, page.Height.Point);
+        ctx.Page = page;
+        ctx.Gfx = gfx;
+        ctx.Y = 30;
+    }
+
+    private static void EnsureSpace(PageContext ctx, PdfDocument doc, double needed)
+    {
+        if (ctx.Y + needed > ctx.Page.Height.Point - Margin)
+        {
+            AdvanceToNewPage(ctx, doc);
+        }
+    }
+
+    // ── Title + section header ───────────────────────────────────────────────
+
     private static double DrawTitle(XGraphics gfx, string title, string subtitle,
         double x, double y, double width)
     {
-        gfx.DrawRectangle(new XSolidBrush(HeaderBg),
-            x, y, width, 50);
-
+        gfx.DrawRectangle(new XSolidBrush(HeaderBg), x, y, width, 50);
         gfx.DrawString(title, TitleFont, new XSolidBrush(TextOnHeader),
             new XRect(x, y + 8, width, 25), XStringFormats.Center);
         gfx.DrawString(subtitle, SubtitleFont, new XSolidBrush(XColor.FromArgb(200, 255, 230, 210)),
             new XRect(x, y + 30, width, 15), XStringFormats.Center);
-
         return y + 55;
     }
 
     private static double DrawSectionHeader(XGraphics gfx, string text, double x, double y, double width)
     {
         gfx.DrawLine(new XPen(AccentColor, 2), x, y + 16, x + width, y + 16);
-        gfx.DrawString(text, SectionFont, new XSolidBrush(TextPrimary),
-            x + 2, y + 13);
+        gfx.DrawString(text, SectionFont, new XSolidBrush(TextPrimary), x + 2, y + 13);
         return y + 22;
     }
 
-    private static double DrawBoxScoreTable(XGraphics gfx, List<PlayerBoxLine> lines,
-        double x, double y, double tableWidth)
+    private static void DrawTableLabel(PageContext ctx, string text)
     {
-        double[] cols = [22, 90, 30, 42, 42, 35, 28, 28, 28, 28, 25, 25];
-        string[] headers = ["#", "PLAYER", "PTS", "FG", "3PT", "FT", "REB", "AST", "STL", "BLK", "TO", "PF"];
+        ctx.Gfx.DrawString(text, TableLabelFont, new XSolidBrush(TextSecondary),
+            Margin + 2, ctx.Y + 10);
+        ctx.Y += 14;
+    }
+
+    // ── Generic table drawing ────────────────────────────────────────────────
+
+    private delegate string[] RowValues<T>(T item);
+
+    private static void DrawTable<T>(
+        PageContext ctx, PdfDocument doc,
+        string label,
+        string[] headers, double[] cols,
+        IReadOnlyList<T> rows,
+        RowValues<T> getValues,
+        int highlightCol = -1)
+    {
+        double tableWidth = cols.Sum();
+        double x = Margin;
+
+        EnsureSpace(ctx, doc, 30 + rows.Count * 13);
+
+        // Label
+        DrawTableLabel(ctx, label);
 
         // Header row
-        gfx.DrawRectangle(new XSolidBrush(TableHeaderBg), x, y, tableWidth, 14);
+        ctx.Gfx.DrawRectangle(new XSolidBrush(TableHeaderBg), x, ctx.Y, tableWidth, 14);
         double cx = x;
         for (int i = 0; i < headers.Length; i++)
         {
             var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextSecondary),
-                new XRect(cx + 2, y, cols[i] - 2, 14), format);
+            ctx.Gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextSecondary),
+                new XRect(cx + 2, ctx.Y, cols[i] - 2, 14), format);
             cx += cols[i];
         }
-        y += 14;
+        ctx.Y += 14;
 
-        // Player rows
+        // Data rows
         int rowIndex = 0;
-        foreach (var line in lines)
+        foreach (var row in rows)
         {
-            // Alternating row background
+            EnsureSpace(ctx, doc, 15);
             if (rowIndex % 2 == 1)
-                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), x, y, tableWidth, 13);
+                ctx.Gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), x, ctx.Y, tableWidth, 13);
 
-            string[] values =
-            [
-                line.JerseyNumber.ToString(),
-                line.PlayerName,
-                line.Points.ToString(),
-                line.FgDisplay,
-                line.Fg3Display,
-                line.FtDisplay,
-                line.Rebounds.ToString(),
-                line.Assists.ToString(),
-                line.Steals.ToString(),
-                line.Blocks.ToString(),
-                line.Turnovers.ToString(),
-                line.Fouls.ToString()
-            ];
-
+            var values = getValues(row);
             cx = x;
-            for (int i = 0; i < values.Length; i++)
+            for (int i = 0; i < values.Length && i < cols.Length; i++)
             {
-                var font = i == 2 ? CellBoldFont : CellFont;
-                var brush = i == 2 ? new XSolidBrush(AccentColor) : new XSolidBrush(TextPrimary);
+                var font = i == highlightCol ? CellBoldFont : CellFont;
+                var brush = i == highlightCol
+                    ? new XSolidBrush(AccentColor)
+                    : new XSolidBrush(TextPrimary);
                 var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-                gfx.DrawString(values[i], font, brush,
-                    new XRect(cx + 2, y, cols[i] - 2, 13), format);
+                ctx.Gfx.DrawString(values[i], font, brush,
+                    new XRect(cx + 2, ctx.Y, cols[i] - 2, 13), format);
                 cx += cols[i];
             }
 
-            gfx.DrawLine(new XPen(LineDark, 0.5), x, y + 13, x + tableWidth, y + 13);
-            y += 13;
+            ctx.Gfx.DrawLine(new XPen(LineDark, 0.5), x, ctx.Y + 13, x + tableWidth, ctx.Y + 13);
+            ctx.Y += 13;
             rowIndex++;
         }
 
-        if (lines.Count == 0)
+        if (rows.Count == 0)
         {
-            gfx.DrawString("No stats recorded", CellFont, new XSolidBrush(TextSecondary),
-                new XRect(x, y, tableWidth, 14), XStringFormats.Center);
-            y += 14;
+            ctx.Gfx.DrawString("No stats recorded", CellFont, new XSolidBrush(TextSecondary),
+                new XRect(x, ctx.Y, tableWidth, 14), XStringFormats.Center);
+            ctx.Y += 14;
         }
 
-        return y + 3;
+        ctx.Y += 6;
     }
 
-    private static double DrawPlayByPlay(XGraphics gfx, PdfDocument doc,
-        IReadOnlyList<StatEvent> events, GameBoxScore boxScore,
-        double margin, double y, double pageWidth, PdfPage page)
+    // ── Game tables ──────────────────────────────────────────────────────────
+
+    private static void DrawGameBasicTable(PageContext ctx, IReadOnlyList<PlayerBoxLine> lines,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40];
+        string[] headers = ["#", "PLAYER", "MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "PF", "TF", "+/-"];
+
+        DrawTable(ctx, doc, "BASIC", headers, cols, lines, line => new[]
+        {
+            line.JerseyNumber.ToString(),
+            line.PlayerName,
+            line.MinutesDisplay,
+            line.Points.ToString(),
+            line.Rebounds.ToString(),
+            line.Assists.ToString(),
+            line.Steals.ToString(),
+            line.Blocks.ToString(),
+            line.Turnovers.ToString(),
+            line.PersonalFouls.ToString(),
+            line.TechnicalFouls.ToString(),
+            line.PlusMinusDisplay
+        }, highlightCol: 3);
+    }
+
+    private static void DrawGameShootingTable(PageContext ctx, IReadOnlyList<PlayerBoxLine> lines,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 52, 44, 52, 44, 52, 44, 52, 44];
+        string[] headers = ["#", "PLAYER", "FGM/A", "FG%", "2PM/A", "2P%", "3PM/A", "3P%", "FTM/A", "FT%"];
+
+        DrawTable(ctx, doc, "SHOOTING", headers, cols, lines, line => new[]
+        {
+            line.JerseyNumber.ToString(),
+            line.PlayerName,
+            line.FgDisplay,
+            line.FgPct.ToString("F1"),
+            line.Fg2Display,
+            line.Fg2Pct.ToString("F1"),
+            line.Fg3Display,
+            line.Fg3Pct.ToString("F1"),
+            line.FtDisplay,
+            line.FtPct.ToString("F1")
+        });
+    }
+
+    private static void DrawGameAdvancedTable(PageContext ctx, IReadOnlyList<PlayerBoxLine> lines,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 46, 46, 44, 50, 44, 44, 40, 46];
+        string[] headers = ["#", "PLAYER", "OREB", "DREB", "A/T", "eFG%", "TS%", "TSA", "EFF", "GmSc"];
+
+        DrawTable(ctx, doc, "ADVANCED", headers, cols, lines, line => new[]
+        {
+            line.JerseyNumber.ToString(),
+            line.PlayerName,
+            line.OffRebounds.ToString(),
+            line.DefRebounds.ToString(),
+            line.AssistToTurnover.ToString("F2"),
+            line.EFgPct.ToString("F1"),
+            line.TsPct.ToString("F1"),
+            line.Tsa.ToString("F1"),
+            line.Efficiency.ToString(),
+            line.GameScore.ToString("F1")
+        }, highlightCol: 9);
+    }
+
+    // ── Season tables ────────────────────────────────────────────────────────
+
+    private static void DrawSeasonBasicTable(PageContext ctx, IReadOnlyList<PlayerSeasonStats> stats,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 36, 36, 40, 40, 40, 40, 40, 40, 40, 40, 40];
+        string[] headers = ["#", "PLAYER", "GP", "MPG", "PPG", "RPG", "APG", "SPG", "BPG", "TOV", "PF", "TF", "+/-"];
+
+        DrawTable(ctx, doc, "BASIC", headers, cols, stats, s => new[]
+        {
+            s.JerseyNumber.ToString(),
+            s.PlayerName,
+            s.GamesPlayed.ToString(),
+            s.MpgDisplay,
+            s.Ppg,
+            s.Rpg,
+            s.Apg,
+            s.Spg,
+            s.Bpg,
+            s.Topg,
+            s.PfPg,
+            s.TfPg,
+            s.PlusMinusDisplay
+        }, highlightCol: 4);
+    }
+
+    private static void DrawSeasonShootingTable(PageContext ctx, IReadOnlyList<PlayerSeasonStats> stats,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 44, 44, 44, 44, 44, 44, 44, 44, 44, 44];
+        string[] headers = ["#", "PLAYER", "FG%", "FGM/G", "FGA/G", "2P%", "2PM/G", "2PA/G", "3P%", "3PM/G", "3PA/G", "FT%"];
+
+        DrawTable(ctx, doc, "SHOOTING (PER GAME)", headers, cols, stats, s => new[]
+        {
+            s.JerseyNumber.ToString(),
+            s.PlayerName,
+            s.FgPct.ToString("F1"),
+            s.FgmPg,
+            s.FgaPg,
+            s.Fg2Pct.ToString("F1"),
+            s.Fg2MPg,
+            s.Fg2APg,
+            s.Fg3Pct.ToString("F1"),
+            s.Fg3MPg,
+            s.Fg3APg,
+            s.FtPct.ToString("F1")
+        });
+    }
+
+    private static void DrawSeasonAdvancedTable(PageContext ctx, IReadOnlyList<PlayerSeasonStats> stats,
+        double pageWidth, PdfDocument doc)
+    {
+        double[] cols = [22, 140, 46, 46, 44, 50, 44, 46, 44, 46];
+        string[] headers = ["#", "PLAYER", "ORPG", "DRPG", "A/T", "eFG%", "TS%", "TSA/G", "EFF", "GmSc"];
+
+        DrawTable(ctx, doc, "ADVANCED (PER GAME)", headers, cols, stats, s => new[]
+        {
+            s.JerseyNumber.ToString(),
+            s.PlayerName,
+            s.Orpg,
+            s.Drpg,
+            s.AtDisplay,
+            s.EFgPct.ToString("F1"),
+            s.TsPct.ToString("F1"),
+            s.TsaPg,
+            s.EffDisplay,
+            s.GmScDisplay
+        }, highlightCol: 8);
+    }
+
+    // ── Play-by-play ─────────────────────────────────────────────────────────
+
+    private static void DrawPlayByPlay(PageContext ctx, PdfDocument doc,
+        IReadOnlyList<StatEvent> events, double pageWidth)
     {
         int rowIndex = 0;
         foreach (var e in events.OrderBy(ev => ev.Timestamp))
         {
-            if (y > page.Height.Point - 40)
-            {
-                page = doc.AddPage();
-                page.Width = XUnit.FromInch(8.5);
-                page.Height = XUnit.FromInch(11);
-                gfx = XGraphics.FromPdfPage(page);
-                y = 30;
-            }
-
+            EnsureSpace(ctx, doc, 14);
             if (rowIndex % 2 == 1)
-                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), margin, y, pageWidth, 12);
+                ctx.Gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), Margin, ctx.Y, pageWidth, 12);
 
             var clock = string.IsNullOrEmpty(e.GameClock) ? "" : $"Q{e.Quarter} {e.GameClock}";
             var desc = FormatStatEvent(e);
 
-            gfx.DrawString(clock, SmallFont, new XSolidBrush(TextSecondary),
-                margin + 3, y + 8);
-            gfx.DrawString(desc, CellFont, new XSolidBrush(TextPrimary),
-                margin + 60, y + 8);
+            ctx.Gfx.DrawString(clock, SmallFont, new XSolidBrush(TextSecondary),
+                Margin + 3, ctx.Y + 8);
+            ctx.Gfx.DrawString(desc, CellFont, new XSolidBrush(TextPrimary),
+                Margin + 60, ctx.Y + 8);
 
-            gfx.DrawLine(new XPen(LineDark, 0.3), margin, y + 11, margin + pageWidth, y + 11);
-            y += 12;
+            ctx.Gfx.DrawLine(new XPen(LineDark, 0.3), Margin, ctx.Y + 11, Margin + pageWidth, ctx.Y + 11);
+            ctx.Y += 12;
             rowIndex++;
         }
-
-        return y;
-    }
-
-    private static double DrawSeasonStatsTable(XGraphics gfx, PdfDocument doc,
-        List<PlayerSeasonStats> stats, double margin, double y, double pageWidth, PdfPage page)
-    {
-        double[] cols = [22, 80, 30, 32, 32, 32, 32, 32, 38, 38, 38];
-        string[] headers = ["#", "PLAYER", "GP", "PPG", "RPG", "APG", "SPG", "BPG", "FG%", "3P%", "FT%"];
-
-        // Header row
-        gfx.DrawRectangle(new XSolidBrush(TableHeaderBg), margin, y, pageWidth, 14);
-        double cx = margin;
-        for (int i = 0; i < headers.Length; i++)
-        {
-            var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-            gfx.DrawString(headers[i], HeaderFont, new XSolidBrush(TextSecondary),
-                new XRect(cx + 2, y, cols[i] - 2, 14), format);
-            cx += cols[i];
-        }
-        y += 14;
-
-        int rowIndex = 0;
-        foreach (var s in stats)
-        {
-            if (y > page.Height.Point - 40)
-            {
-                page = doc.AddPage();
-                page.Width = XUnit.FromInch(8.5);
-                page.Height = XUnit.FromInch(11);
-                gfx = XGraphics.FromPdfPage(page);
-                y = 30;
-            }
-
-            if (rowIndex % 2 == 1)
-                gfx.DrawRectangle(new XSolidBrush(TableAltRowBg), margin, y, pageWidth, 13);
-
-            string[] values =
-            [
-                s.JerseyNumber.ToString(),
-                s.PlayerName,
-                s.GamesPlayed.ToString(),
-                s.Ppg,
-                s.Rpg,
-                s.Apg,
-                s.Spg,
-                s.Bpg,
-                s.FgPct.ToString("F1"),
-                s.Fg3Pct.ToString("F1"),
-                s.FtPct.ToString("F1")
-            ];
-
-            cx = margin;
-            for (int i = 0; i < values.Length; i++)
-            {
-                var font = i == 3 ? CellBoldFont : CellFont;
-                var brush = i == 3 ? new XSolidBrush(AccentColor) : new XSolidBrush(TextPrimary);
-                var format = i <= 1 ? XStringFormats.CenterLeft : XStringFormats.Center;
-                gfx.DrawString(values[i], font, brush,
-                    new XRect(cx + 2, y, cols[i] - 2, 13), format);
-                cx += cols[i];
-            }
-
-            gfx.DrawLine(new XPen(LineDark, 0.5), margin, y + 13, margin + pageWidth, y + 13);
-            y += 13;
-            rowIndex++;
-        }
-
-        return y;
     }
 
     private static string FormatStatEvent(StatEvent e)

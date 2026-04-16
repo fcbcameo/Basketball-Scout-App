@@ -12,5 +12,7 @@ public enum StatType
     Block,
     Turnover,
     PersonalFoul,
-    TechnicalFoul
+    TechnicalFoul,
+    SubIn,
+    SubOut
 }

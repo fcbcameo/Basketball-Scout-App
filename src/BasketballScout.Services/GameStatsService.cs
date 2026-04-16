@@ -11,6 +11,9 @@ public class GameStatsService
     private readonly ITeamRepository _teamRepository;
     private readonly IPlayerRepository _playerRepository;
 
+    // Each regulation quarter is 10 minutes.
+    private const int QuarterSeconds = 600;
+
     public GameStatsService(
         IGameRepository gameRepository,
         IStatEventRepository statEventRepository,
@@ -32,8 +35,11 @@ public class GameStatsService
         var homeTeam = await _teamRepository.GetByIdAsync(game.HomeTeamId);
         var awayTeam = await _teamRepository.GetByIdAsync(game.AwayTeamId);
 
-        var homeLines = BuildBoxLines(events, homeTeam?.Players ?? []);
-        var awayLines = BuildBoxLines(events, awayTeam?.Players ?? []);
+        var metrics = ComputeGameMetrics(events, game.HomeTeamId, game.AwayTeamId,
+            homeTeam?.Players ?? [], awayTeam?.Players ?? []);
+
+        var homeLines = BuildBoxLines(events, homeTeam?.Players ?? [], metrics);
+        var awayLines = BuildBoxLines(events, awayTeam?.Players ?? [], metrics);
 
         return new GameBoxScore
         {
@@ -74,7 +80,18 @@ public class GameStatsService
         foreach (var game in games)
         {
             var events = await _statEventRepository.GetByGameIdAsync(game.Id);
-            var playersInGame = events.Select(e => e.PlayerId).Distinct().ToHashSet();
+            var homeTeam = teams.FirstOrDefault(t => t.Id == game.HomeTeamId);
+            var awayTeam = teams.FirstOrDefault(t => t.Id == game.AwayTeamId);
+
+            var metrics = ComputeGameMetrics(events, game.HomeTeamId, game.AwayTeamId,
+                homeTeam?.Players ?? [], awayTeam?.Players ?? []);
+
+            var playersInGame = events
+                .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
+                .Select(e => e.PlayerId)
+                .Concat(metrics.PlayerSecondsOnCourt.Keys)
+                .Distinct()
+                .ToHashSet();
 
             foreach (var playerId in playersInGame)
             {
@@ -86,6 +103,17 @@ public class GameStatsService
                 foreach (var e in events.Where(ev => ev.PlayerId == playerId))
                 {
                     ApplyStatEvent(ps, e);
+                }
+
+                if (metrics.PlayerSecondsOnCourt.TryGetValue(playerId, out var secs) && secs > 0)
+                {
+                    ps.TotalSecondsOnCourt += secs;
+                    ps.GamesWithMinutes++;
+                }
+
+                if (metrics.PlayerPlusMinus.TryGetValue(playerId, out var pm))
+                {
+                    ps.TotalPlusMinus += pm;
                 }
             }
         }
@@ -123,7 +151,151 @@ public class GameStatsService
         return shots;
     }
 
-    private static List<PlayerBoxLine> BuildBoxLines(IReadOnlyList<StatEvent> allEvents, ICollection<Player> players)
+    // ── Build per-game metrics (minutes + plus/minus) from sub/scoring events ──
+
+    private static GameMetrics ComputeGameMetrics(
+        IReadOnlyList<StatEvent> events,
+        int homeTeamId,
+        int awayTeamId,
+        ICollection<Player> homePlayers,
+        ICollection<Player> awayPlayers)
+    {
+        var metrics = new GameMetrics();
+
+        // Map player → team side for quick PM attribution
+        var playerTeam = new Dictionary<int, int>();
+        foreach (var p in homePlayers) playerTeam[p.Id] = homeTeamId;
+        foreach (var p in awayPlayers) playerTeam[p.Id] = awayTeamId;
+
+        // Only games with sub events get minutes and PM
+        bool hasSubEvents = events.Any(e => e.StatType == StatType.SubIn || e.StatType == StatType.SubOut);
+        if (!hasSubEvents) return metrics;
+
+        // Order events by absolute time + id for a stable timeline
+        var ordered = events
+            .Select(e => new { Event = e, AbsSec = ToAbsoluteSeconds(e) })
+            .OrderBy(x => x.AbsSec)
+            .ThenBy(x => x.Event.Id)
+            .ToList();
+
+        // Compute game end: last non-sub event wins; fall back to last event
+        int gameEndSec = ordered.Count > 0 ? ordered[^1].AbsSec : 0;
+
+        // Build intervals per player
+        var onSince = new Dictionary<int, int>();
+        var intervals = new Dictionary<int, List<(int Start, int End)>>();
+
+        foreach (var entry in ordered)
+        {
+            var e = entry.Event;
+            var t = entry.AbsSec;
+
+            if (e.StatType == StatType.SubIn)
+            {
+                onSince[e.PlayerId] = t;
+            }
+            else if (e.StatType == StatType.SubOut)
+            {
+                if (onSince.TryGetValue(e.PlayerId, out var start))
+                {
+                    if (!intervals.TryGetValue(e.PlayerId, out var list))
+                    {
+                        list = new List<(int, int)>();
+                        intervals[e.PlayerId] = list;
+                    }
+                    list.Add((start, t));
+                    onSince.Remove(e.PlayerId);
+                }
+            }
+        }
+
+        // Close any still-open intervals at game end
+        foreach (var (playerId, start) in onSince)
+        {
+            if (!intervals.TryGetValue(playerId, out var list))
+            {
+                list = new List<(int, int)>();
+                intervals[playerId] = list;
+            }
+            list.Add((start, gameEndSec));
+        }
+
+        // Minutes
+        foreach (var (playerId, list) in intervals)
+        {
+            int total = list.Sum(i => Math.Max(0, i.End - i.Start));
+            metrics.PlayerSecondsOnCourt[playerId] = total;
+        }
+
+        // Plus/Minus: for each scoring event, credit every on-court player
+        foreach (var entry in ordered)
+        {
+            var e = entry.Event;
+            int pts = ScoringPoints(e);
+            if (pts == 0) continue;
+            if (!playerTeam.TryGetValue(e.PlayerId, out var scoringTeam)) continue;
+
+            int t = entry.AbsSec;
+
+            foreach (var (playerId, list) in intervals)
+            {
+                if (!IsOnCourtAt(list, t)) continue;
+                if (!playerTeam.TryGetValue(playerId, out var side)) continue;
+
+                int delta = side == scoringTeam ? pts : -pts;
+                metrics.PlayerPlusMinus.TryGetValue(playerId, out var cur);
+                metrics.PlayerPlusMinus[playerId] = cur + delta;
+            }
+        }
+
+        return metrics;
+    }
+
+    private static bool IsOnCourtAt(List<(int Start, int End)> intervals, int t)
+    {
+        foreach (var (s, e) in intervals)
+        {
+            if (t >= s && t < e) return true;
+        }
+        return false;
+    }
+
+    private static int ScoringPoints(StatEvent e)
+    {
+        if (e.ShotResult != ShotResult.Made) return 0;
+        return e.StatType switch
+        {
+            StatType.Points2 => 2,
+            StatType.Points3 => 3,
+            StatType.FreeThrow => 1,
+            _ => 0
+        };
+    }
+
+    private static int ToAbsoluteSeconds(StatEvent e)
+    {
+        int remaining = ParseClockSeconds(e.GameClock);
+        int elapsedInQuarter = Math.Max(0, QuarterSeconds - remaining);
+        int q = Math.Max(1, e.Quarter);
+        return (q - 1) * QuarterSeconds + elapsedInQuarter;
+    }
+
+    private static int ParseClockSeconds(string clock)
+    {
+        if (string.IsNullOrWhiteSpace(clock)) return QuarterSeconds;
+        var parts = clock.Split(':');
+        if (parts.Length != 2) return QuarterSeconds;
+        if (!int.TryParse(parts[0], out var m)) return QuarterSeconds;
+        if (!int.TryParse(parts[1], out var s)) return QuarterSeconds;
+        return Math.Clamp(m * 60 + s, 0, QuarterSeconds);
+    }
+
+    // ── Box-line building ──
+
+    private static List<PlayerBoxLine> BuildBoxLines(
+        IReadOnlyList<StatEvent> allEvents,
+        ICollection<Player> players,
+        GameMetrics metrics)
     {
         var lines = new Dictionary<int, PlayerBoxLine>();
         foreach (var player in players)
@@ -142,8 +314,16 @@ public class GameStatsService
             ApplyStatEventToBox(lines[e.PlayerId], e);
         }
 
+        foreach (var (playerId, line) in lines)
+        {
+            if (metrics.PlayerSecondsOnCourt.TryGetValue(playerId, out var secs))
+                line.SecondsOnCourt = secs;
+            if (metrics.PlayerPlusMinus.TryGetValue(playerId, out var pm))
+                line.PlusMinus = pm;
+        }
+
         return lines.Values
-            .Where(l => l.HasStats)
+            .Where(l => l.HasStats || l.SecondsOnCourt > 0)
             .OrderByDescending(l => l.Points)
             .ToList();
     }
@@ -165,8 +345,10 @@ public class GameStatsService
                 line.FtAttempted++;
                 break;
             case StatType.OffensiveRebound:
+                line.OffRebounds++;
+                break;
             case StatType.DefensiveRebound:
-                line.Rebounds++;
+                line.DefRebounds++;
                 break;
             case StatType.Assist:
                 line.Assists++;
@@ -181,8 +363,10 @@ public class GameStatsService
                 line.Turnovers++;
                 break;
             case StatType.PersonalFoul:
+                line.PersonalFouls++;
+                break;
             case StatType.TechnicalFoul:
-                line.Fouls++;
+                line.TechnicalFouls++;
                 break;
         }
     }
@@ -204,8 +388,10 @@ public class GameStatsService
                 ps.FtAttempted++;
                 break;
             case StatType.OffensiveRebound:
+                ps.TotalOffRebounds++;
+                break;
             case StatType.DefensiveRebound:
-                ps.TotalRebounds++;
+                ps.TotalDefRebounds++;
                 break;
             case StatType.Assist:
                 ps.TotalAssists++;
@@ -219,7 +405,19 @@ public class GameStatsService
             case StatType.Turnover:
                 ps.TotalTurnovers++;
                 break;
+            case StatType.PersonalFoul:
+                ps.TotalPersonalFouls++;
+                break;
+            case StatType.TechnicalFoul:
+                ps.TotalTechnicalFouls++;
+                break;
         }
+    }
+
+    private class GameMetrics
+    {
+        public Dictionary<int, int> PlayerSecondsOnCourt { get; } = new();
+        public Dictionary<int, int> PlayerPlusMinus { get; } = new();
     }
 }
 
@@ -249,19 +447,51 @@ public class PlayerBoxLine
     public int Fg3Attempted { get; set; }
     public int FtMade { get; set; }
     public int FtAttempted { get; set; }
-    public int Rebounds { get; set; }
+    public int OffRebounds { get; set; }
+    public int DefRebounds { get; set; }
     public int Assists { get; set; }
     public int Steals { get; set; }
     public int Blocks { get; set; }
     public int Turnovers { get; set; }
-    public int Fouls { get; set; }
+    public int PersonalFouls { get; set; }
+    public int TechnicalFouls { get; set; }
+    public int SecondsOnCourt { get; set; }
+    public int PlusMinus { get; set; }
 
+    public int Rebounds => OffRebounds + DefRebounds;
+    public int Fouls => PersonalFouls + TechnicalFouls;
     public int Points => (Fg2Made * 2) + (Fg3Made * 3) + FtMade;
     public int FgMade => Fg2Made + Fg3Made;
     public int FgAttempted => Fg2Attempted + Fg3Attempted;
     public string FgDisplay => $"{FgMade}/{FgAttempted}";
     public string Fg3Display => $"{Fg3Made}/{Fg3Attempted}";
+    public string Fg2Display => $"{Fg2Made}/{Fg2Attempted}";
     public string FtDisplay => $"{FtMade}/{FtAttempted}";
+
+    // Minutes display: "MM:SS" or "—" if not tracked
+    public string MinutesDisplay => SecondsOnCourt > 0
+        ? $"{SecondsOnCourt / 60}:{SecondsOnCourt % 60:D2}"
+        : "—";
+
+    public string PlusMinusDisplay => SecondsOnCourt > 0 ? (PlusMinus >= 0 ? $"+{PlusMinus}" : PlusMinus.ToString()) : "—";
+
+    // Advanced (per-game — a single game)
+    public double FgPct => FgAttempted > 0 ? (FgMade * 100.0 / FgAttempted) : 0;
+    public double Fg2Pct => Fg2Attempted > 0 ? (Fg2Made * 100.0 / Fg2Attempted) : 0;
+    public double Fg3Pct => Fg3Attempted > 0 ? (Fg3Made * 100.0 / Fg3Attempted) : 0;
+    public double FtPct => FtAttempted > 0 ? (FtMade * 100.0 / FtAttempted) : 0;
+    public double EFgPct => FgAttempted > 0 ? ((FgMade + 0.5 * Fg3Made) * 100.0 / FgAttempted) : 0;
+    public double Tsa => FgAttempted + 0.44 * FtAttempted;
+    public double TsPct => Tsa > 0 ? (Points * 100.0 / (2 * Tsa)) : 0;
+    public double AssistToTurnover => Turnovers > 0 ? Assists / (double)Turnovers : Assists;
+    public int Efficiency =>
+        (Points + Rebounds + Assists + Steals + Blocks)
+        - ((FgAttempted - FgMade) + (FtAttempted - FtMade) + Turnovers);
+    public double GameScore =>
+        Points + 0.4 * FgMade - 0.7 * FgAttempted - 0.4 * (FtAttempted - FtMade)
+        + 0.7 * OffRebounds + 0.3 * DefRebounds + Steals + 0.7 * Assists
+        + 0.7 * Blocks - 0.4 * PersonalFouls - Turnovers;
+
     public bool HasStats => FgAttempted > 0 || FtAttempted > 0 || Rebounds > 0 || Assists > 0 ||
                             Steals > 0 || Blocks > 0 || Turnovers > 0 || Fouls > 0;
 }
@@ -275,13 +505,19 @@ public class PlayerSeasonStats
     public string TeamAbbr { get; set; } = string.Empty;
     public string TeamColor { get; set; } = "#000000";
     public int GamesPlayed { get; set; }
+    public int GamesWithMinutes { get; set; }
 
     public int TotalPoints { get; set; }
-    public int TotalRebounds { get; set; }
+    public int TotalOffRebounds { get; set; }
+    public int TotalDefRebounds { get; set; }
     public int TotalAssists { get; set; }
     public int TotalSteals { get; set; }
     public int TotalBlocks { get; set; }
     public int TotalTurnovers { get; set; }
+    public int TotalPersonalFouls { get; set; }
+    public int TotalTechnicalFouls { get; set; }
+    public int TotalSecondsOnCourt { get; set; }
+    public int TotalPlusMinus { get; set; }
 
     public int Fg2Made { get; set; }
     public int Fg2Attempted { get; set; }
@@ -291,18 +527,68 @@ public class PlayerSeasonStats
     public int FtAttempted { get; set; }
 
     private int Gp => Math.Max(1, GamesPlayed);
+
+    public int TotalRebounds => TotalOffRebounds + TotalDefRebounds;
+    public int TotalFouls => TotalPersonalFouls + TotalTechnicalFouls;
+
     public string Ppg => (TotalPoints / (double)Gp).ToString("F1");
     public string Rpg => (TotalRebounds / (double)Gp).ToString("F1");
+    public string Orpg => (TotalOffRebounds / (double)Gp).ToString("F1");
+    public string Drpg => (TotalDefRebounds / (double)Gp).ToString("F1");
     public string Apg => (TotalAssists / (double)Gp).ToString("F1");
     public string Spg => (TotalSteals / (double)Gp).ToString("F1");
     public string Bpg => (TotalBlocks / (double)Gp).ToString("F1");
     public string Topg => (TotalTurnovers / (double)Gp).ToString("F1");
+    public string PfPg => (TotalPersonalFouls / (double)Gp).ToString("F1");
+    public string TfPg => (TotalTechnicalFouls / (double)Gp).ToString("F1");
+
+    // Minutes averaged only over games where minutes were actually tracked
+    public string MpgDisplay =>
+        GamesWithMinutes > 0 ? (TotalSecondsOnCourt / 60.0 / GamesWithMinutes).ToString("F1") : "—";
+
+    public string TotalMinutesDisplay =>
+        GamesWithMinutes > 0 ? $"{TotalSecondsOnCourt / 60}" : "—";
+
+    public string PlusMinusDisplay =>
+        GamesWithMinutes > 0 ? (TotalPlusMinus >= 0 ? $"+{TotalPlusMinus}" : TotalPlusMinus.ToString()) : "—";
 
     public int FgMade => Fg2Made + Fg3Made;
     public int FgAttempted => Fg2Attempted + Fg3Attempted;
     public double FgPct => FgAttempted > 0 ? (FgMade * 100.0 / FgAttempted) : 0;
+    public double Fg2Pct => Fg2Attempted > 0 ? (Fg2Made * 100.0 / Fg2Attempted) : 0;
     public double Fg3Pct => Fg3Attempted > 0 ? (Fg3Made * 100.0 / Fg3Attempted) : 0;
     public double FtPct => FtAttempted > 0 ? (FtMade * 100.0 / FtAttempted) : 0;
+
+    public string FgmPg => (FgMade / (double)Gp).ToString("F1");
+    public string FgaPg => (FgAttempted / (double)Gp).ToString("F1");
+    public string Fg2MPg => (Fg2Made / (double)Gp).ToString("F1");
+    public string Fg2APg => (Fg2Attempted / (double)Gp).ToString("F1");
+    public string Fg3MPg => (Fg3Made / (double)Gp).ToString("F1");
+    public string Fg3APg => (Fg3Attempted / (double)Gp).ToString("F1");
+    public string FtmPg => (FtMade / (double)Gp).ToString("F1");
+    public string FtaPg => (FtAttempted / (double)Gp).ToString("F1");
+
+    // Advanced
+    public double AssistToTurnover => TotalTurnovers > 0 ? TotalAssists / (double)TotalTurnovers : TotalAssists;
+    public string AtDisplay => AssistToTurnover.ToString("F2");
+
+    public double EFgPct => FgAttempted > 0 ? ((FgMade + 0.5 * Fg3Made) * 100.0 / FgAttempted) : 0;
+    public double Tsa => FgAttempted + 0.44 * FtAttempted;
+    public string TsaPg => (Tsa / Gp).ToString("F1");
+    public double TsPct => Tsa > 0 ? (TotalPoints * 100.0 / (2 * Tsa)) : 0;
+
+    // Efficiency is typically shown per-game
+    public double EffPerGame =>
+        ((TotalPoints + TotalRebounds + TotalAssists + TotalSteals + TotalBlocks)
+         - ((FgAttempted - FgMade) + (FtAttempted - FtMade) + TotalTurnovers)) / (double)Gp;
+    public string EffDisplay => EffPerGame.ToString("F1");
+
+    // Game Score averaged per game
+    public double GmScPerGame =>
+        (TotalPoints + 0.4 * FgMade - 0.7 * FgAttempted - 0.4 * (FtAttempted - FtMade)
+         + 0.7 * TotalOffRebounds + 0.3 * TotalDefRebounds + TotalSteals + 0.7 * TotalAssists
+         + 0.7 * TotalBlocks - 0.4 * TotalPersonalFouls - TotalTurnovers) / (double)Gp;
+    public string GmScDisplay => GmScPerGame.ToString("F1");
 }
 
 public class ShotChartPoint

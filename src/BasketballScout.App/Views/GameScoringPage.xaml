@@ -32,8 +32,14 @@
             <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
                 <Label Text="{Binding Quarter, StringFormat='Q{0}'}" FontSize="9" FontAttributes="Bold"
                        TextColor="#555" VerticalOptions="Center" CharacterSpacing="2" />
-                <Label Text="{Binding GameClock}" FontSize="17" FontAttributes="Bold"
-                       TextColor="#ddd" VerticalOptions="Center" />
+                <Border StrokeShape="RoundRectangle 4" Stroke="#1a1a1a" StrokeThickness="1"
+                        BackgroundColor="#141414" Padding="8,2" VerticalOptions="Center">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleClockCommand}" />
+                    </Border.GestureRecognizers>
+                    <Label Text="{Binding GameClock}" FontSize="17" FontAttributes="Bold"
+                           TextColor="{Binding ClockColor}" VerticalOptions="Center" />
+                </Border>
                 <Button Text="Q+" Command="{Binding NextQuarterCommand}"
                         FontSize="9" FontAttributes="Bold" Padding="6,2"
                         BackgroundColor="#1a1a1a" TextColor="#666" CornerRadius="3"
