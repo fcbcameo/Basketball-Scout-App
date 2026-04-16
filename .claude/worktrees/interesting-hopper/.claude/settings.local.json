@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/michi_9o40b52/**)",
+      "Bash(rm -rf \"C:/Users/michi_9o40b52/source/repos/BasketballScout/.claude/worktrees/interesting-hopper\")",
+      "Read(//c/Users/michi_9o40b52/source/repos/BasketballScout/.claude/worktrees/**)",
+      "Bash(find \"C:/Users/michi_9o40b52/source/repos/BasketballScout/.claude/worktrees/interesting-hopper\" -mindepth 1 -delete)",
+      "Bash(dotnet build:*)",
+      "Bash(gh -R fcbcameo/Basketball-Scout-App pr view 10 --json url,state,title)",
+      "Bash(gh -R fcbcameo/Basketball-Scout-App pr comment 10 --body ':*)"
+    ]
+  }
+}

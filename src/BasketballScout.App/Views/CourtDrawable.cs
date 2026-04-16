@@ -1,144 +1,204 @@
 namespace BasketballScout.App.Views;
 
 /// <summary>
-/// Draws a basketball half-court with dark theme matching the V3 mockup.
+/// Draws a FIBA-accurate basketball half-court with dark theme matching the V3 mockup.
 /// Dark background with subtle golden-brown court lines.
+///
+/// Proportions (must match <c>PdfReportService.DrawCourt</c> so shot markers
+/// saved as (CourtX, CourtY) appear in the same visual location on both app and PDF):
+///   - 15m wide × 14m deep half-court
+///   - Paint 4.9m × 5.8m
+///   - Free-throw circle radius 1.8m
+///   - Rim 0.46m diameter, 1.575m from baseline
+///   - Backboard 1.8m wide, 1.2m from baseline
+///   - 3PT arc radius 6.75m from basket, corner-3 lines 0.9m from sidelines
+///   - Restricted area arc 1.25m radius
+///
+/// Orientation: basket at the BOTTOM of the drawn rectangle
+/// (Y grows down, so "distance from baseline" maps to h - dist).
 /// </summary>
 public class CourtDrawable : IDrawable
 {
+    // FIBA official half-court dimensions (metres)
+    private const float CourtWidthM = 15.0f;
+    private const float CourtDepthM = 14.0f;
+    private const float PaintWidthM = 4.9f;
+    private const float PaintDepthM = 5.8f;
+    private const float FtCircleRM = 1.8f;
+    private const float RimDistFromBaselineM = 1.575f;
+    private const float RimDiameterM = 0.46f;
+    private const float BackboardDistFromBaselineM = 1.2f;
+    private const float BackboardWidthM = 1.8f;
+    private const float ThreePtRadiusM = 6.75f;
+    private const float CornerThreeInsetM = 0.9f;
+    private const float RestrictedAreaRM = 1.25f;
+    private const float CenterCircleRM = 1.8f;
+
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
+        float x = dirtyRect.X;
+        float y = dirtyRect.Y;
         float w = dirtyRect.Width;
         float h = dirtyRect.Height;
 
         // Background — dark court
         canvas.FillColor = Color.FromArgb("#18150f");
-        canvas.FillRectangle(0, 0, w, h);
+        canvas.FillRectangle(x, y, w, h);
 
-        // Court line colors
-        var lineColor = Color.FromArgb("#2a2520");
-        var faintLineColor = Color.FromArgb("#2a252088");
+        // Palette
+        var lineColor = Color.FromArgb("#3a352e");
+        var paintLine = Color.FromArgb("#2a2520");
+        var faintLine = Color.FromArgb("#2a252088");
+        var paintFill = Color.FromArgb("#1e1a1444");
         var rimColor = Color.FromArgb("#888888");
         var backboardColor = Color.FromArgb("#555555");
         var textColor = Color.FromArgb("#2a2520");
 
-        canvas.StrokeSize = 1.5f;
-        canvas.StrokeColor = lineColor;
+        // Per-metre scale
+        float sx = w / CourtWidthM;
+        float sy = h / CourtDepthM;
+
+        // Basket / baseline reference points (basket is at the BOTTOM).
+        float basketX = x + w * 0.5f;
+        float basketY = y + h - RimDistFromBaselineM * sy;
+        float bbY = y + h - BackboardDistFromBaselineM * sy;
+        float bbHalfW = BackboardWidthM * 0.5f * sx;
 
         // ── Outer boundary ──
-        float margin = w * 0.02f;
-        canvas.DrawRectangle(margin, margin, w - 2 * margin, h - 2 * margin);
-
-        // ── Half court line (top) ──
-        canvas.StrokeSize = 1.5f;
-        canvas.StrokeColor = lineColor;
-        canvas.DrawLine(margin, margin, w - margin, margin);
-
-        // ── Paint / Key (rectangle near basket) ──
-        // Paint is centered, extends from baseline (bottom) up ~38% of court
-        float paintLeft = w * 0.31f;
-        float paintRight = w * 0.69f;
-        float paintTop = h * 0.60f;
-        float paintBottom = h - margin;
-        float paintWidth = paintRight - paintLeft;
-        float paintHeight = paintBottom - paintTop;
-
+        canvas.StrokeColor = paintLine;
         canvas.StrokeSize = 1.2f;
+        canvas.DrawRectangle(x, y, w, h);
+
+        // ── Paint (rectangular key) ──
+        // Top edge = free-throw line, bottom edge = baseline.
+        float paintHalfW = PaintWidthM * 0.5f * sx;
+        float paintX = basketX - paintHalfW;
+        float paintW = paintHalfW * 2f;
+        float paintH = PaintDepthM * sy;
+        float paintY = y + h - paintH;
+
+        canvas.FillColor = paintFill;
+        canvas.FillRectangle(paintX, paintY, paintW, paintH);
+
+        canvas.StrokeColor = paintLine;
+        canvas.StrokeSize = 1.2f;
+        canvas.DrawRectangle(paintX, paintY, paintW, paintH);
+
+        // ── Free-throw circle (radius 1.8m), centred on the FT line ──
+        // Lower half (inside paint, toward basket) = solid.
+        // Upper half (outside paint, toward centre court) = dashed.
+        float ftCX = basketX;
+        float ftCY = paintY;
+        float ftRx = FtCircleRM * sx;
+        float ftRy = FtCircleRM * sy;
+
+        // In Y-down, angles 0→π sweep through the bottom of the ellipse (inside paint).
+        DrawPolylineArc(canvas, paintLine, 1.2f, null, ftCX, ftCY, ftRx, ftRy, 0f, MathF.PI);
+        // Upper half (outside paint): angles π→2π, dashed.
+        DrawPolylineArc(canvas, faintLine, 0.8f, new float[] { 4f, 4f },
+                        ftCX, ftCY, ftRx, ftRy, MathF.PI, 2f * MathF.PI);
+
+        // ── 3-point line (corner straights + arc) ──
+        float arcRx = ThreePtRadiusM * sx;
+        float arcRy = ThreePtRadiusM * sy;
+        float cornerInset = CornerThreeInsetM * sx;
+        float leftCornerX = x + cornerInset;
+        float rightCornerX = x + w - cornerInset;
+
+        // Find where the arc meets each corner line.
+        // (dx/arcRx)² + (dy/arcRy)² = 1  ⇒  dy = arcRy · √(1 − (dx/arcRx)²)
+        // Arc bulges UP (toward centre court), so dy is NEGATIVE in Y-down.
+        float dxCorner = (leftCornerX - basketX) / arcRx;
+        float dyMag = arcRy * MathF.Sqrt(MathF.Max(0f, 1f - dxCorner * dxCorner));
+        float cornerEndY = basketY - dyMag; // above basketY in Y-down
+
+        // Corner-3 straight lines: from baseline (bottom) up to where the arc meets them.
         canvas.StrokeColor = lineColor;
-
-        // Paint fill (subtle)
-        canvas.FillColor = Color.FromArgb("#1e1a1444");
-        canvas.FillRectangle(paintLeft, paintTop, paintWidth, paintHeight);
-
-        // Paint outline
-        canvas.DrawRectangle(paintLeft, paintTop, paintWidth, paintHeight);
-
-        // Free throw line
-        canvas.DrawLine(paintLeft, paintTop, paintRight, paintTop);
-
-        // Free throw circle (dashed)
-        canvas.StrokeColor = faintLineColor;
-        canvas.StrokeSize = 0.8f;
-        canvas.StrokeDashPattern = new float[] { 4, 4 };
-        float ftCircleRadius = w * 0.12f;
-        canvas.DrawEllipse(w * 0.5f - ftCircleRadius, paintTop - ftCircleRadius,
-            ftCircleRadius * 2, ftCircleRadius * 2);
-        canvas.StrokeDashPattern = null;
-
-        // ── 3-Point arc ──
         canvas.StrokeSize = 1.5f;
-        canvas.StrokeColor = Color.FromArgb("#3a352e");
+        canvas.DrawLine(leftCornerX, y + h, leftCornerX, cornerEndY);
+        canvas.DrawLine(rightCornerX, y + h, rightCornerX, cornerEndY);
 
-        // 3pt arc — draw as a path
-        // The arc goes from the left corner to the right corner, curving through the top
-        float arcCenterX = w * 0.5f;
-        float arcCenterY = h * 0.98f; // Near baseline
-        float arcRadius = w * 0.42f;
+        // Arc: right corner → top → left corner.
+        // startAngle = atan2((cornerEndY - basketY)/arcRy, (rightCornerX - basketX)/arcRx)
+        //   dy is negative, dx is positive ⇒ small negative angle.
+        // endAngle = -π - startAngle (mirrored on the left side, still negative).
+        float startAngle = MathF.Atan2(
+            (cornerEndY - basketY) / arcRy,
+            (rightCornerX - basketX) / arcRx);
+        float endAngle = -MathF.PI - startAngle;
+        DrawPolylineArc(canvas, lineColor, 1.5f, null,
+                        basketX, basketY, arcRx, arcRy, startAngle, endAngle);
 
-        // Left straight portion (corner 3)
-        float cornerEndY = h * 0.58f;
-        canvas.DrawLine(w * 0.10f, h - margin, w * 0.10f, cornerEndY);
+        // ── Restricted area (1.25m no-charge semi-circle) ──
+        // Upper half of the ellipse (bulges UP toward centre court): angles -π → 0.
+        float raRx = RestrictedAreaRM * sx;
+        float raRy = RestrictedAreaRM * sy;
+        DrawPolylineArc(canvas, faintLine, 0.8f, null,
+                        basketX, basketY, raRx, raRy, -MathF.PI, 0f);
 
-        // Right straight portion (corner 3)
-        canvas.DrawLine(w * 0.90f, h - margin, w * 0.90f, cornerEndY);
-
-        // Arc portion — approximate with a bezier-like path
-        var path = new PathF();
-        path.MoveTo(w * 0.10f, cornerEndY);
-
-        // Quadratic bezier through the top
-        // Control points to make a nice arc
-        path.QuadTo(w * 0.10f, h * 0.20f, w * 0.50f, h * 0.16f);
-        canvas.DrawPath(path);
-
-        var path2 = new PathF();
-        path2.MoveTo(w * 0.50f, h * 0.16f);
-        path2.QuadTo(w * 0.90f, h * 0.20f, w * 0.90f, cornerEndY);
-        canvas.DrawPath(path2);
-
-        // ── Restricted area / Charge circle ──
-        canvas.StrokeColor = faintLineColor;
-        canvas.StrokeSize = 0.8f;
-        var restrictedPath = new PathF();
-        restrictedPath.MoveTo(w * 0.44f, h - margin);
-        restrictedPath.QuadTo(w * 0.44f, h * 0.82f, w * 0.50f, h * 0.80f);
-        restrictedPath.QuadTo(w * 0.56f, h * 0.82f, w * 0.56f, h - margin);
-        canvas.DrawPath(restrictedPath);
-
-        // ── Backboard ──
+        // ── Backboard — thick line, closer to baseline than the rim ──
         canvas.StrokeColor = backboardColor;
         canvas.StrokeSize = 2f;
-        canvas.DrawLine(w * 0.43f, h * 0.93f, w * 0.57f, h * 0.93f);
+        canvas.DrawLine(basketX - bbHalfW, bbY, basketX + bbHalfW, bbY);
 
-        // ── Rim ──
+        // ── Rim — circle of 0.46m diameter at basket position ──
         canvas.StrokeColor = rimColor;
         canvas.StrokeSize = 1.5f;
-        float rimRadius = w * 0.018f;
-        canvas.DrawEllipse(w * 0.5f - rimRadius, h * 0.95f - rimRadius,
-            rimRadius * 2, rimRadius * 2);
+        float rimRx = RimDiameterM * 0.5f * sx;
+        float rimRy = RimDiameterM * 0.5f * sy;
+        float rimR = MathF.Max(rimRx, MathF.Max(rimRy, 2f));
+        canvas.DrawEllipse(basketX - rimR, basketY - rimR, rimR * 2f, rimR * 2f);
 
-        // ── Center court half-circle (at top) ──
-        canvas.StrokeColor = faintLineColor;
-        canvas.StrokeSize = 0.8f;
-        var topArc = new PathF();
-        topArc.MoveTo(w * 0.38f, margin);
-        topArc.QuadTo(w * 0.38f, h * 0.14f, w * 0.50f, h * 0.14f);
-        topArc.QuadTo(w * 0.62f, h * 0.14f, w * 0.62f, margin);
-        canvas.DrawPath(topArc);
+        // Small stem from backboard to rim so the basket reads clearly.
+        canvas.StrokeColor = paintLine;
+        canvas.StrokeSize = 1f;
+        canvas.DrawLine(basketX, bbY, basketX, basketY - rimR);
+
+        // ── Centre-circle half at the far (top) end of the court ──
+        // On a half-court view the centre line is at the top, and we see only our
+        // half of the centre circle (the half on this side of the centre line).
+        float centerR = CenterCircleRM * sx;
+        DrawPolylineArc(canvas, faintLine, 0.8f, null,
+                        basketX, y, centerR, CenterCircleRM * sy, 0f, MathF.PI);
 
         // ── Text labels ──
         canvas.FontColor = textColor;
         canvas.FontSize = w * 0.035f;
         canvas.Font = Microsoft.Maui.Graphics.Font.Default;
-
-        // "3PT ZONE" text near top
-        canvas.DrawString("3PT ZONE", 0, h * 0.06f, w, h * 0.06f,
+        canvas.DrawString("3PT ZONE", x, y + h * 0.04f, w, h * 0.06f,
             HorizontalAlignment.Center, VerticalAlignment.Center);
 
-        // "PAINT" text in the paint area
-        canvas.FontColor = faintLineColor;
+        canvas.FontColor = faintLine;
         canvas.FontSize = w * 0.03f;
-        canvas.DrawString("PAINT", 0, paintTop + paintHeight * 0.3f, w, paintHeight * 0.3f,
+        canvas.DrawString("PAINT", paintX, paintY + paintH * 0.25f,
+            paintW, paintH * 0.3f,
             HorizontalAlignment.Center, VerticalAlignment.Center);
+    }
+
+    /// <summary>
+    /// Approximates an elliptical arc as a polyline.
+    /// Angles in radians, standard math convention (0 = +X, +π/2 = +Y).
+    /// Because MAUI's Y grows down, +π/2 draws BELOW the centre.
+    /// </summary>
+    private static void DrawPolylineArc(
+        ICanvas canvas, Color color, float strokeWidth, float[]? dashPattern,
+        float cx, float cy, float rx, float ry,
+        float startAngle, float endAngle, int segments = 64)
+    {
+        canvas.StrokeColor = color;
+        canvas.StrokeSize = strokeWidth;
+        canvas.StrokeDashPattern = dashPattern;
+
+        var path = new PathF();
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = startAngle + (endAngle - startAngle) * i / segments;
+            float px = cx + rx * MathF.Cos(t);
+            float py = cy + ry * MathF.Sin(t);
+            if (i == 0) path.MoveTo(px, py);
+            else path.LineTo(px, py);
+        }
+        canvas.DrawPath(path);
+        canvas.StrokeDashPattern = null;
     }
 }

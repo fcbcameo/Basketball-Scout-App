@@ -111,6 +111,30 @@ public partial class SeasonStatsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ShareGamePdfAsync(GameSummary game)
+    {
+        try
+        {
+            var pdfBytes = await _pdfService.GenerateGameReportAsync(game.GameId);
+            var safeScore = MakeFileSafe(game.ScoreDisplay);
+            var safeDate = MakeFileSafe(game.DateDisplay);
+            var fileName = $"GameReport_{safeScore}_{safeDate}.pdf";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
+
+            await Launcher.Default.OpenAsync(new OpenFileRequest
+            {
+                Title = $"Game Report — {game.ScoreDisplay}",
+                File = new ReadOnlyFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate PDF: {ex.Message}", "OK");
+        }
+    }
+
+    [RelayCommand]
     private async Task SharePdfAsync()
     {
         try
