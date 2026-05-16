@@ -36,18 +36,30 @@
                             <DataTemplate x:DataType="vm:GameSummary">
                                 <Border Padding="10,8" StrokeShape="RoundRectangle 6"
                                         Stroke="#1a1a1a" BackgroundColor="#141414">
-                                    <Border.GestureRecognizers>
-                                        <TapGestureRecognizer
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewGameCommand}"
-                                            CommandParameter="{Binding .}" />
-                                    </Border.GestureRecognizers>
-                                    <Grid ColumnDefinitions="50,*,Auto">
+                                    <Grid ColumnDefinitions="50,*,Auto,Auto" ColumnSpacing="8">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewGameCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
                                         <Label Text="{Binding DateDisplay}" FontSize="10" TextColor="#666"
                                                VerticalOptions="Center" />
                                         <Label Grid.Column="1" Text="{Binding ScoreDisplay}" FontSize="12"
                                                FontAttributes="Bold" TextColor="#ccc"
                                                HorizontalOptions="Center" VerticalOptions="Center" />
-                                        <Label Grid.Column="2" Text=">" FontSize="14" TextColor="#444"
+                                        <Button Grid.Column="2"
+                                                Text="PDF"
+                                                FontSize="10"
+                                                FontAttributes="Bold"
+                                                BackgroundColor="#e85d26"
+                                                TextColor="White"
+                                                CornerRadius="4"
+                                                Padding="8,4"
+                                                HeightRequest="28"
+                                                MinimumWidthRequest="48"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ShareGamePdfCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Label Grid.Column="3" Text=">" FontSize="14" TextColor="#444"
                                                VerticalOptions="Center" />
                                     </Grid>
                                 </Border>
