@@ -41,14 +41,17 @@ jobs:
 
       - name: Publish (unsigned device build)
         run: |
+          # Empty CodesignKey/Provision alone is NOT enough — the iOS device
+          # build still demands a signing identity. _RequireCodeSigning=false
+          # skips signing entirely, producing the unsigned .app that Sideloadly
+          # will sign later with your free Apple ID.
           dotnet publish "$PROJECT_PATH" \
             -f "$TFM" \
             -c "$CONFIG" \
             -p:RuntimeIdentifier=ios-arm64 \
             -p:CodesignKey= \
-            -p:CodesignProvision=
-          # If the build ever fails inside a codesign step, add:
-          #   -p:_RequireCodeSigning=false
+            -p:CodesignProvision= \
+            -p:_RequireCodeSigning=false
 
       - name: Package .app into an .ipa (preserve framework symlinks)
         run: |
