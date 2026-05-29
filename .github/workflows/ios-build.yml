@@ -1,0 +1,73 @@
+name: Build iOS .ipa (unsigned, for Sideloadly)
+
+# Builds an UNSIGNED iOS .ipa on a hosted macOS runner so it can be signed
+# later on Windows with Sideloadly + a free Apple ID (no Mac, no $99 program).
+#
+# The macos-26 runner ships a self-consistent toolchain: .NET SDK 10.0.300,
+# a matching MAUI workload, and Xcode 26.0.1 / 26.1.1 / 26.2 / 26.3 /
+# 26.4.1 (default) / 26.5. .NET 10 for iOS requires Xcode 26.0+, so the
+# default 26.4.1 is fine. We pin it only for reproducibility.
+#
+# If a future servicing release starts demanding a newer Xcode, check which
+# Xcodes the runner has (actions/runner-images > images/macos/macos-26-arm64-Readme.md)
+# and which Xcode the workload set needs (dotnet/macios releases), then bump
+# XCODE_VERSION to a matched pair the runner actually has installed.
+
+on:
+  workflow_dispatch:        # build on-demand from the Actions tab
+
+jobs:
+  build-ios:
+    runs-on: macos-26
+    env:
+      PROJECT_PATH: src/BasketballScout.App/BasketballScout.App.csproj
+      TFM: net10.0-ios
+      CONFIG: Release
+      XCODE_VERSION: "26.4.1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Show .NET and restore the iOS workload
+        run: |
+          dotnet --version                        # runner ships 10.0.300
+          dotnet workload restore "$PROJECT_PATH"  # uses the preinstalled, SDK-matched workload
+
+      - name: Publish (unsigned device build)
+        run: |
+          dotnet publish "$PROJECT_PATH" \
+            -f "$TFM" \
+            -c "$CONFIG" \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:CodesignKey= \
+            -p:CodesignProvision=
+          # If the build ever fails inside a codesign step, add:
+          #   -p:_RequireCodeSigning=false
+
+      - name: Package .app into an .ipa (preserve framework symlinks)
+        run: |
+          APP_PATH=$(find "$(dirname "$PROJECT_PATH")/bin/$CONFIG/$TFM" -type d -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app found under the publish output"
+            find . -type d -name "*.app"
+            exit 1
+          fi
+          echo "Found app: $APP_PATH"
+          rm -rf payload-stage && mkdir -p payload-stage/Payload
+          cp -R "$APP_PATH" payload-stage/Payload/
+          # -y keeps the symlinks inside MAUI's embedded .framework/.dylib bundles,
+          # which Sideloadly needs for a structurally valid IPA.
+          (cd payload-stage && zip -qry ../BasketballScout.ipa Payload)
+          ls -la BasketballScout.ipa
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasketballScout-ipa
+          path: BasketballScout.ipa
+          retention-days: 7
