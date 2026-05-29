@@ -3,15 +3,16 @@ name: Build iOS .ipa (unsigned, for Sideloadly)
 # Builds an UNSIGNED iOS .ipa on a hosted macOS runner so it can be signed
 # later on Windows with Sideloadly + a free Apple ID (no Mac, no $99 program).
 #
-# The macos-26 runner ships a self-consistent toolchain: .NET SDK 10.0.300,
-# a matching MAUI workload, and Xcode 26.0.1 / 26.1.1 / 26.2 / 26.3 /
-# 26.4.1 (default) / 26.5. .NET 10 for iOS requires Xcode 26.0+, so the
-# default 26.4.1 is fine. We pin it only for reproducibility.
+# The macos-26 runner ships .NET SDK 10.0.300 with a preinstalled
+# Microsoft.iOS SDK pack (26.5.x) that requires EXACTLY Xcode 26.5 — the
+# .NET-for-iOS toolchain pins a specific Xcode, not just a minimum. The
+# runner's *default* Xcode is 26.4.1, so we must explicitly select 26.5
+# (also installed on the image: 26.0.1 / 26.1.1 / 26.2 / 26.3 / 26.4.1 / 26.5).
 #
-# If a future servicing release starts demanding a newer Xcode, check which
-# Xcodes the runner has (actions/runner-images > images/macos/macos-26-arm64-Readme.md)
-# and which Xcode the workload set needs (dotnet/macios releases), then bump
-# XCODE_VERSION to a matched pair the runner actually has installed.
+# If a future servicing release changes the required Xcode, the build error
+# states the exact version it wants. Check which Xcodes the runner has
+# (actions/runner-images > images/macos/macos-26-arm64-Readme.md) and pin
+# XCODE_VERSION to the one the installed iOS SDK pack demands.
 
 on:
   workflow_dispatch:        # build on-demand from the Actions tab
@@ -23,7 +24,7 @@ jobs:
       PROJECT_PATH: src/BasketballScout.App/BasketballScout.App.csproj
       TFM: net10.0-ios
       CONFIG: Release
-      XCODE_VERSION: "26.4.1"
+      XCODE_VERSION: "26.5"
 
     steps:
       - uses: actions/checkout@v4
