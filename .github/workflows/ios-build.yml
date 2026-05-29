@@ -39,19 +39,74 @@ jobs:
           dotnet --version                        # runner ships 10.0.300
           dotnet workload restore "$PROJECT_PATH"  # uses the preinstalled, SDK-matched workload
 
-      - name: Publish (unsigned device build)
+      - name: Create a throwaway self-signed code-signing identity
+        # A device (ios-arm64) build refuses to finish without a signing
+        # identity in the keychain (and _RequireCodeSigning=false is ignored by
+        # the .NET 10 iOS SDK). So we mint a self-signed "Apple Development"
+        # cert just to satisfy the build. It is NOT a real Apple identity and
+        # produces a non-installable bundle — that's fine: Sideloadly strips it
+        # and re-signs with your free Apple ID at install time.
         run: |
-          # Empty CodesignKey/Provision alone is NOT enough — the iOS device
-          # build still demands a signing identity. _RequireCodeSigning=false
-          # skips signing entirely, producing the unsigned .app that Sideloadly
-          # will sign later with your free Apple ID.
+          KEYCHAIN_PATH="$RUNNER_TEMP/ci.keychain-db"
+          KEYCHAIN_PWD="ci-temp-pwd"
+          CERT_NAME="Apple Development: CI Build"
+
+          # OpenSSL config: code-signing EKU + an OU that looks like a team id.
+          cat > "$RUNNER_TEMP/cs.cnf" <<'CNF'
+          [req]
+          distinguished_name = dn
+          x509_extensions = v3
+          prompt = no
+          [dn]
+          CN = Apple Development: CI Build
+          OU = CIBUILD0000
+          O  = BasketballScout CI
+          C  = US
+          [v3]
+          basicConstraints = critical, CA:false
+          keyUsage = critical, digitalSignature
+          extendedKeyUsage = critical, codeSigning
+          CNF
+
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$RUNNER_TEMP/cs.key" -out "$RUNNER_TEMP/cs.crt" \
+            -days 365 -config "$RUNNER_TEMP/cs.cnf"
+          openssl pkcs12 -export -inkey "$RUNNER_TEMP/cs.key" -in "$RUNNER_TEMP/cs.crt" \
+            -out "$RUNNER_TEMP/cs.p12" -passout "pass:$KEYCHAIN_PWD" -name "$CERT_NAME"
+
+          # Create + unlock a dedicated keychain and import the identity.
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cs.p12" -k "$KEYCHAIN_PATH" -P "$KEYCHAIN_PWD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH" >/dev/null
+
+          # Put our keychain first in the search list and trust the cert so it
+          # registers as a *valid* code-signing identity.
+          EXISTING=$(security list-keychains -d user | sed 's/[\" ]//g')
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING
+          security default-keychain -s "$KEYCHAIN_PATH"
+          sudo security add-trusted-cert -d -r trustRoot \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cs.crt" || true
+
+          echo "Valid code-signing identities:"
+          security find-identity -v -p codesigning
+
+          # Hand the cert name + keychain to later steps.
+          echo "CODESIGN_KEY=$CERT_NAME" >> "$GITHUB_ENV"
+
+      - name: Publish (device build, self-signed for Sideloadly to re-sign)
+        run: |
           dotnet publish "$PROJECT_PATH" \
             -f "$TFM" \
             -c "$CONFIG" \
             -p:RuntimeIdentifier=ios-arm64 \
-            -p:CodesignKey= \
+            -p:CodesignKey="$CODESIGN_KEY" \
             -p:CodesignProvision= \
-            -p:_RequireCodeSigning=false
+            -p:CodesignEntitlements= \
+            -p:ArchiveOnBuild=false
 
       - name: Package .app into an .ipa (preserve framework symlinks)
         run: |
