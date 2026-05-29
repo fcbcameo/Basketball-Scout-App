@@ -71,7 +71,10 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -nodes \
             -keyout "$RUNNER_TEMP/cs.key" -out "$RUNNER_TEMP/cs.crt" \
             -days 365 -config "$RUNNER_TEMP/cs.cnf"
-          openssl pkcs12 -export -inkey "$RUNNER_TEMP/cs.key" -in "$RUNNER_TEMP/cs.crt" \
+          # -legacy + SHA1 MAC/3DES so macOS 'security import' can read the .p12.
+          # (OpenSSL 3.x defaults to AES-256, which fails MAC verification on import.)
+          openssl pkcs12 -export -legacy -macalg sha1 \
+            -inkey "$RUNNER_TEMP/cs.key" -in "$RUNNER_TEMP/cs.crt" \
             -out "$RUNNER_TEMP/cs.p12" -passout "pass:$KEYCHAIN_PWD" -name "$CERT_NAME"
 
           # Create + unlock a dedicated keychain and import the identity.
