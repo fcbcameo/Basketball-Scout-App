@@ -55,17 +55,32 @@ jobs:
       - name: Restore the iOS workload
         run: dotnet workload restore "$PROJECT_PATH"
 
+      - name: Detect the imported signing identity
+        run: |
+          echo "Code-signing identities in the keychain:"
+          security find-identity -v -p codesigning
+          # Grab the first valid identity's name (the bit in quotes).
+          IDENTITY=$(security find-identity -v -p codesigning \
+            | grep -o '"[^"]*"' | head -n1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No code-signing identity found in the keychain"
+            exit 1
+          fi
+          echo "Using signing identity: $IDENTITY"
+          echo "CODESIGN_KEY=$IDENTITY" >> "$GITHUB_ENV"
+
       - name: Publish signed .ipa
         run: |
           # github.run_number gives every upload a unique, increasing build
           # number so TestFlight never rejects a duplicate.
+          # CodesignKey is auto-detected above to avoid name-mismatch errors.
           dotnet publish "$PROJECT_PATH" \
             -f "$TFM" \
             -c "$CONFIG" \
             -p:RuntimeIdentifier=ios-arm64 \
             -p:ArchiveOnBuild=true \
             -p:ApplicationVersion=${{ github.run_number }} \
-            -p:CodesignKey="${{ secrets.IOS_SIGNING_IDENTITY }}" \
+            -p:CodesignKey="$CODESIGN_KEY" \
             -p:CodesignProvision="${{ vars.IOS_PROVISION_PROFILE_NAME }}"
 
       - name: Locate the .ipa
