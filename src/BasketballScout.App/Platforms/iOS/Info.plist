@@ -4,6 +4,19 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Purpose strings required by App Store validation (error 90683):
+	     the MAUI framework references these protected APIs even though
+	     BasketballScout does not use them. -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>BasketballScout does not access your calendar.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>BasketballScout does not access your contacts.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>BasketballScout does not access your media library.</string>
+	<key>NSSiriUsageDescription</key>
+	<string>BasketballScout does not use Siri.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BasketballScout does not use the microphone.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIDeviceFamily</key>

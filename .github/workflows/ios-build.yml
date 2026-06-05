@@ -96,12 +96,23 @@ jobs:
           echo "path=$IPA" >> "$GITHUB_OUTPUT"
 
       - name: Upload to TestFlight
-        uses: apple-actions/upload-testflight-build@v4
-        with:
-          app-path: ${{ steps.ipa.outputs.path }}
-          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        # Upload directly with altool instead of the polling action: it uploads
+        # and exits, so there's no post-upload "wait for processing" loop whose
+        # 20-minute App Store Connect token can expire and 401 on slow processing.
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          # altool looks for the key here: ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+          xcrun altool --upload-app \
+            -f "${{ steps.ipa.outputs.path }}" \
+            -t ios \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
 
       - name: Upload .ipa artifact (backup copy)
         uses: actions/upload-artifact@v4
