@@ -1,29 +1,32 @@
-name: Build iOS .ipa (unsigned, for Sideloadly)
+name: Build & upload iOS to TestFlight
 
-# Builds an UNSIGNED iOS .ipa on a hosted macOS runner so it can be signed
-# later on Windows with Sideloadly + a free Apple ID (no Mac, no $99 program).
+# Builds a SIGNED iOS .ipa on a hosted macOS runner and uploads it to
+# TestFlight, using an Apple Developer Program account ($99/yr). No Mac
+# needed on your desk — you install the build on your iPad via the
+# TestFlight app over the air.
 #
-# The macos-26 runner ships a self-consistent toolchain: .NET SDK 10.0.300,
-# a matching MAUI workload, and Xcode 26.0.1 / 26.1.1 / 26.2 / 26.3 /
-# 26.4.1 (default) / 26.5. .NET 10 for iOS requires Xcode 26.0+, so the
-# default 26.4.1 is fine. We pin it only for reproducibility.
-#
-# If a future servicing release starts demanding a newer Xcode, check which
-# Xcodes the runner has (actions/runner-images > images/macos/macos-26-arm64-Readme.md)
-# and which Xcode the workload set needs (dotnet/macios releases), then bump
-# XCODE_VERSION to a matched pair the runner actually has installed.
+# Required GitHub secrets (Settings > Secrets and variables > Actions > Secrets):
+#   IOS_DIST_CERT_P12_BASE64   - base64 of your Apple Distribution .p12
+#   IOS_DIST_CERT_PASSWORD     - password you set on that .p12
+#   IOS_PROVISION_PROFILE_BASE64 - base64 of your App Store .mobileprovision
+#   IOS_SIGNING_IDENTITY       - e.g. "Apple Distribution: Your Name (TEAMID)"
+#   APPSTORE_ISSUER_ID         - App Store Connect API issuer id (UUID)
+#   APPSTORE_KEY_ID            - App Store Connect API key id
+#   APPSTORE_API_PRIVATE_KEY   - full text of the AuthKey_XXXX.p8 file
+# Required GitHub variable (same screen > Variables):
+#   IOS_PROVISION_PROFILE_NAME - the exact name you gave the profile in Apple's portal
 
 on:
-  workflow_dispatch:        # build on-demand from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  build-ios:
+  testflight:
     runs-on: macos-26
     env:
       PROJECT_PATH: src/BasketballScout.App/BasketballScout.App.csproj
       TFM: net10.0-ios
       CONFIG: Release
-      XCODE_VERSION: "26.4.1"
+      XCODE_VERSION: "26.5"   # must match the runner's installed iOS SDK pack
 
     steps:
       - uses: actions/checkout@v4
@@ -33,41 +36,61 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer
           xcodebuild -version
 
-      - name: Show .NET and restore the iOS workload
-        run: |
-          dotnet --version                        # runner ships 10.0.300
-          dotnet workload restore "$PROJECT_PATH"  # uses the preinstalled, SDK-matched workload
+      - name: Import Apple Distribution certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
 
-      - name: Publish (unsigned device build)
+      - name: Install provisioning profile
         run: |
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}" | base64 --decode \
+            > "$PROFILE_DIR/build.mobileprovision"
+          echo "Installed provisioning profile:"
+          security cms -D -i "$PROFILE_DIR/build.mobileprovision" | \
+            plutil -extract Name raw - || true
+
+      - name: Restore the iOS workload
+        run: dotnet workload restore "$PROJECT_PATH"
+
+      - name: Publish signed .ipa
+        run: |
+          # github.run_number gives every upload a unique, increasing build
+          # number so TestFlight never rejects a duplicate.
           dotnet publish "$PROJECT_PATH" \
             -f "$TFM" \
             -c "$CONFIG" \
             -p:RuntimeIdentifier=ios-arm64 \
-            -p:CodesignKey= \
-            -p:CodesignProvision=
-          # If the build ever fails inside a codesign step, add:
-          #   -p:_RequireCodeSigning=false
+            -p:ArchiveOnBuild=true \
+            -p:ApplicationVersion=${{ github.run_number }} \
+            -p:CodesignKey="${{ secrets.IOS_SIGNING_IDENTITY }}" \
+            -p:CodesignProvision="${{ vars.IOS_PROVISION_PROFILE_NAME }}"
 
-      - name: Package .app into an .ipa (preserve framework symlinks)
+      - name: Locate the .ipa
+        id: ipa
         run: |
-          APP_PATH=$(find "$(dirname "$PROJECT_PATH")/bin/$CONFIG/$TFM" -type d -name "*.app" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "::error::No .app found under the publish output"
-            find . -type d -name "*.app"
+          IPA=$(find "$(dirname "$PROJECT_PATH")/bin/$CONFIG/$TFM" -name "*.ipa" | head -n 1)
+          if [ -z "$IPA" ]; then
+            echo "::error::No .ipa was produced"
+            find . -name "*.ipa"
             exit 1
           fi
-          echo "Found app: $APP_PATH"
-          rm -rf payload-stage && mkdir -p payload-stage/Payload
-          cp -R "$APP_PATH" payload-stage/Payload/
-          # -y keeps the symlinks inside MAUI's embedded .framework/.dylib bundles,
-          # which Sideloadly needs for a structurally valid IPA.
-          (cd payload-stage && zip -qry ../BasketballScout.ipa Payload)
-          ls -la BasketballScout.ipa
+          echo "Found: $IPA"
+          echo "path=$IPA" >> "$GITHUB_OUTPUT"
 
-      - name: Upload .ipa artifact
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v4
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+
+      - name: Upload .ipa artifact (backup copy)
         uses: actions/upload-artifact@v4
         with:
           name: BasketballScout-ipa
-          path: BasketballScout.ipa
+          path: ${{ steps.ipa.outputs.path }}
           retention-days: 7
