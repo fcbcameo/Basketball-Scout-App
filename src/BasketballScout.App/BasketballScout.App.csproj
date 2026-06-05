@@ -47,6 +47,14 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
 
+	<!-- iOS Release: disable the managed linker (trimming) so EF Core's
+	     reflection-based model building isn't stripped. With trimming on, the
+	     app crashed at launch (SIGABRT) during db.Database.EnsureCreated().
+	     Can be tightened later to MtouchLink=SdkOnly + trimmer roots to shrink size. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' and '$(Configuration)' == 'Release'">
+		<MtouchLink>None</MtouchLink>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<!-- App Icon -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#0f172a" />

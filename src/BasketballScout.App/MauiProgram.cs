@@ -12,6 +12,9 @@ namespace BasketballScout.App;
 
 public static class MauiProgram
 {
+    /// <summary>Captures a fatal startup error so the UI can show it instead of crashing.</summary>
+    public static Exception? StartupError { get; private set; }
+
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
@@ -70,11 +73,17 @@ public static class MauiProgram
 
         var app = builder.Build();
 
-        // Ensure database is created
-        using (var scope = app.Services.CreateScope())
+        // Ensure database is created. Capture any failure so the app can
+        // surface it on screen instead of crashing silently at launch.
+        try
         {
+            using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ScoutDbContext>();
             db.Database.EnsureCreated();
+        }
+        catch (Exception ex)
+        {
+            StartupError = ex;
         }
 
         return app;
