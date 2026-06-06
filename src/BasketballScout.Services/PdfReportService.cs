@@ -2,6 +2,7 @@ using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
 using PdfSharpCore.Drawing;
+using PdfSharpCore.Fonts;
 using PdfSharpCore.Pdf;
 
 namespace BasketballScout.Services;
@@ -40,7 +41,27 @@ public class PdfReportService
     private const double PageHeightInches = 8.5;
     private const double Margin = 30;
 
-    // Fonts — PdfSharpCore handles font resolution via SixLabors.Fonts
+    // Fonts — resolved by EmbeddedFontResolver (embedded OpenSans) so PDF
+    // generation works on iOS, where there is no system font directory.
+    private static bool _fontResolverSet;
+    private static readonly object _fontResolverLock = new();
+
+    /// <summary>
+    /// Registers the embedded-font resolver exactly once, before any XFont is
+    /// created. Must run before any font operation or PdfSharpCore would fall
+    /// back to its built-in resolver and crash on iOS.
+    /// </summary>
+    private static void EnsureFontResolver()
+    {
+        if (_fontResolverSet) return;
+        lock (_fontResolverLock)
+        {
+            if (_fontResolverSet) return;
+            GlobalFontSettings.FontResolver = new EmbeddedFontResolver();
+            _fontResolverSet = true;
+        }
+    }
+
     private static XFont? _titleFont;
     private static XFont? _subtitleFont;
     private static XFont? _sectionFont;
@@ -81,6 +102,7 @@ public class PdfReportService
 
     public async Task<byte[]> GenerateGameReportAsync(int gameId)
     {
+        EnsureFontResolver();
         var box = await _statsService.GetGameBoxScoreAsync(gameId);
         var events = await _statEventRepository.GetByGameIdAsync(gameId);
         var game = await _gameRepository.GetByIdAsync(gameId);
@@ -1116,6 +1138,7 @@ public class PdfReportService
 
     public async Task<byte[]> GenerateSeasonReportAsync(int seasonId, int? teamId = null)
     {
+        EnsureFontResolver();
         var season = await _seasonRepository.GetByIdAsync(seasonId);
         var stats = await _statsService.GetSeasonStatsAsync(seasonId);
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
