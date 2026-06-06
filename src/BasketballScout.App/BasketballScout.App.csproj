@@ -47,12 +47,19 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
 
-	<!-- iOS Release: disable the managed linker (trimming) so EF Core's
-	     reflection-based model building isn't stripped. With trimming on, the
-	     app crashed at launch (SIGABRT) during db.Database.EnsureCreated().
-	     Can be tightened later to MtouchLink=SdkOnly + trimmer roots to shrink size. -->
+	<!-- iOS Release needs two things for EF Core to work:
+	     1) MtouchLink=None — keep the managed linker (trimming) from stripping
+	        EF Core's reflection-based model building.
+	     2) MtouchInterpreter=-all — enable the Mono interpreter so dynamic code
+	        is supported. Without it, the AOT-only (no-JIT) iOS runtime makes
+	        EF Core throw "Model building is not supported when publishing with
+	        NativeAOT. Use a compiled model." at db.Database.EnsureCreated().
+	     The interpreter is App Store compliant (it interprets IL, no runtime JIT).
+	     Future optimization: generate a compiled model (dotnet ef dbcontext
+	     optimize) + UseModel() to drop the interpreter and restore full AOT speed. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' and '$(Configuration)' == 'Release'">
 		<MtouchLink>None</MtouchLink>
+		<MtouchInterpreter>-all</MtouchInterpreter>
 	</PropertyGroup>
 
 	<ItemGroup>
