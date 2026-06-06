@@ -27,6 +27,10 @@ jobs:
       TFM: net10.0-ios
       CONFIG: Release
       XCODE_VERSION: "26.5"   # must match the runner's installed iOS SDK pack
+      # Opt JS actions into Node 24 ahead of GitHub's June 16, 2026 forced
+      # switch (silences the Node 20 deprecation warning and verifies the
+      # actions work on Node 24 before it becomes the default).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - uses: actions/checkout@v4
