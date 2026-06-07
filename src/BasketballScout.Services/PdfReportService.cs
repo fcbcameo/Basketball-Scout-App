@@ -233,18 +233,21 @@ public class PdfReportService
         string awayName, int[] awayQ,
         string homeName, int[] homeQ)
     {
-        // Columns: Name, Q1, Q2, Q3, Q4, T
+        // Columns: Name, <one per period: 1..4 then OT1, OT2, …>, T
+        int periods = Math.Max(awayQ.Length, homeQ.Length);
         double nameColW = width * 0.42;
-        double qColW = (width - nameColW) / 5;
+        double qColW = (width - nameColW) / (periods + 1);
         double rowH = 14;
         double headerH = 14;
 
-        // Header row (Q labels)
+        static string PeriodHeader(int i) => i < 4 ? (i + 1).ToString() : $"OT{i - 3}";
+
+        // Header row (period labels)
         gfx.DrawRectangle(new XSolidBrush(AccentColor), x, y, width, headerH);
         double cx = x + nameColW;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < periods; i++)
         {
-            gfx.DrawString((i + 1).ToString(), HeaderFont, new XSolidBrush(TextOnHeader),
+            gfx.DrawString(PeriodHeader(i), HeaderFont, new XSolidBrush(TextOnHeader),
                 new XRect(cx, y, qColW, headerH), XStringFormats.Center);
             cx += qColW;
         }
@@ -258,10 +261,11 @@ public class PdfReportService
             new XRect(x + 4, ry, nameColW - 6, rowH), XStringFormats.CenterLeft);
         cx = x + nameColW;
         int awayTotal = 0;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < periods; i++)
         {
-            awayTotal += awayQ[i];
-            gfx.DrawString(awayQ[i].ToString(), CellFont, new XSolidBrush(TextPrimary),
+            int v = i < awayQ.Length ? awayQ[i] : 0;
+            awayTotal += v;
+            gfx.DrawString(v.ToString(), CellFont, new XSolidBrush(TextPrimary),
                 new XRect(cx, ry, qColW, rowH), XStringFormats.Center);
             cx += qColW;
         }
@@ -275,19 +279,28 @@ public class PdfReportService
             new XRect(x + 4, ry, nameColW - 6, rowH), XStringFormats.CenterLeft);
         cx = x + nameColW;
         int homeTotal = 0;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < periods; i++)
         {
-            homeTotal += homeQ[i];
-            gfx.DrawString(homeQ[i].ToString(), CellFont, new XSolidBrush(TextPrimary),
+            int v = i < homeQ.Length ? homeQ[i] : 0;
+            homeTotal += v;
+            gfx.DrawString(v.ToString(), CellFont, new XSolidBrush(TextPrimary),
                 new XRect(cx, ry, qColW, rowH), XStringFormats.Center);
             cx += qColW;
         }
         gfx.DrawString(homeTotal.ToString(), CellBoldFont, new XSolidBrush(TextPrimary),
             new XRect(cx, ry, qColW, rowH), XStringFormats.Center);
 
+        // Vertical separators between period columns + before the total
+        var grid = new XPen(LineDark, 0.4);
+        cx = x + nameColW;
+        for (int i = 0; i <= periods; i++)
+        {
+            gfx.DrawLine(grid, cx, y, cx, y + headerH + rowH * 2);
+            cx += qColW;
+        }
+
         // Outline
-        var pen = new XPen(LineDark, 0.5);
-        gfx.DrawRectangle(pen, x, y, width, headerH + rowH * 2);
+        gfx.DrawRectangle(new XPen(LineDark, 0.5), x, y, width, headerH + rowH * 2);
     }
 
     // ── Game flow line chart ──────────────────────────────────────────────────
@@ -885,12 +898,18 @@ public class PdfReportService
 
     private static int[] ComputeQuarterScores(IReadOnlyList<StatEvent> events, HashSet<int> teamPlayerIds)
     {
-        int[] q = new int[4];
+        // At least 4 periods (Q1–Q4); extend for any overtime periods present so
+        // both teams' arrays come out the same length.
+        int periods = 4;
+        foreach (var e in events)
+            periods = Math.Max(periods, e.Quarter);
+
+        int[] q = new int[periods];
         foreach (var e in events)
         {
             if (!teamPlayerIds.Contains(e.PlayerId)) continue;
             if (e.ShotResult != ShotResult.Made) continue;
-            int idx = Math.Clamp(e.Quarter - 1, 0, 3);
+            int idx = Math.Clamp(e.Quarter - 1, 0, periods - 1);
             int pts = e.StatType switch
             {
                 StatType.Points2 => 2,
