@@ -431,25 +431,30 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Undo ──
+    /// <summary>Raised after an undo, with a human-readable description of what was undone
+    /// (or "Nothing to undo"). The view surfaces this as a toast.</summary>
+    public event Action<string>? ActionUndone;
+
     [RelayCommand]
     private async Task UndoAsync()
     {
-        var last = await _statEventRepository.GetLastByGameIdAsync(GameId);
-        // Don't let undo touch sub events (starting lineup, substitutions).
-        while (last is not null && (last.StatType == StatType.SubIn || last.StatType == StatType.SubOut))
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        // Never undo sub events (starting lineup / substitutions) — find the most
+        // recent real action of ANY type.
+        var last = events
+            .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
+            .OrderByDescending(e => e.Timestamp)
+            .FirstOrDefault();
+
+        if (last is null)
         {
-            // There's no "skip" on the repository, so walk manually.
-            var events = await _statEventRepository.GetByGameIdAsync(GameId);
-            last = events
-                .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
-                .OrderByDescending(e => e.Timestamp)
-                .FirstOrDefault();
-            break;
+            ActionUndone?.Invoke("Nothing to undo");
+            return;
         }
-        if (last is null) return;
+
+        bool isHome = _allHomePlayers.Any(p => p.Id == last.PlayerId);
 
         // Reverse score impact
-        bool isHome = _allHomePlayers.Any(p => p.Id == last.PlayerId);
         if (last.ShotResult == ShotResult.Made)
         {
             int pts = last.StatType switch
@@ -463,17 +468,20 @@ public partial class GameScoringViewModel : ObservableObject
             else AwayScore = Math.Max(0, AwayScore - pts);
         }
 
+        // Reverse foul impact
         if (last.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
         {
             if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
             else AwayFouls = Math.Max(0, AwayFouls - 1);
         }
 
-        // Remove shot chart dot if it was a shot
+        // Remove the matching shot-chart dot if it was a field goal
         if (last.StatType is StatType.Points2 or StatType.Points3 && ShotChartDots.Count > 0)
         {
             ShotChartDots.RemoveAt(ShotChartDots.Count - 1);
         }
+
+        string description = DescribeEvent(last);
 
         await _statEventRepository.DeleteAsync(last.Id);
 
@@ -482,7 +490,38 @@ public partial class GameScoringViewModel : ObservableObject
 
         ClearFollowUp();
         PendingShot = null;
+
+        ActionUndone?.Invoke($"Undid: {description}");
     }
+
+    /// <summary>Builds a short label like "#1 Wemby — 2PT Made" for play log / undo feedback.</summary>
+    private string DescribeEvent(StatEvent e)
+    {
+        var player = _allHomePlayers.Concat(_allAwayPlayers)
+            .FirstOrDefault(p => p.Id == e.PlayerId);
+        string who = player is not null ? $"#{player.JerseyNumber} {player.Name}" : "Player";
+
+        string what = e.StatType switch
+        {
+            StatType.Points2 => $"2PT {ShotResultText(e)}",
+            StatType.Points3 => $"3PT {ShotResultText(e)}",
+            StatType.FreeThrow => $"FT {ShotResultText(e)}",
+            StatType.Assist => "Assist",
+            StatType.Steal => "Steal",
+            StatType.Block => "Block",
+            StatType.Turnover => "Turnover",
+            StatType.OffensiveRebound => "OFF Rebound",
+            StatType.DefensiveRebound => "DEF Rebound",
+            StatType.PersonalFoul => "Personal Foul",
+            StatType.TechnicalFoul => "Technical Foul",
+            _ => e.StatType.ToString()
+        };
+
+        return $"{who} — {what}";
+    }
+
+    private static string ShotResultText(StatEvent e) =>
+        e.ShotResult == ShotResult.Made ? "Made" : "Miss";
 
     // ── Quarter management ──
     [RelayCommand]

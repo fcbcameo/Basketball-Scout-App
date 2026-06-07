@@ -1,5 +1,7 @@
 using BasketballScout.App.ViewModels;
 using BasketballScout.Core.Models;
+using CommunityToolkit.Maui.Alerts;
+using CommunityToolkit.Maui.Core;
 
 namespace BasketballScout.App.Views;
 
@@ -23,6 +25,21 @@ public partial class GameScoringPage : ContentPage
 
         // React to VM property changes
         _vm.PropertyChanged += OnVmPropertyChanged;
+
+        // Show a toast describing what an undo removed
+        _vm.ActionUndone += OnActionUndone;
+    }
+
+    private async void OnActionUndone(string message)
+    {
+        try
+        {
+            await Toast.Make(message, ToastDuration.Short).Show();
+        }
+        catch
+        {
+            // Toast is best-effort feedback; never let it crash scoring.
+        }
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -48,6 +65,7 @@ public partial class GameScoringPage : ContentPage
                     ZoneLabel.TextColor = _vm.PendingShot.IsSuggested3Pt
                         ? Color.FromArgb("#fbbf24") : Color.FromArgb("#60a5fa");
                 }
+                RenderPendingMarker();
                 UpdateOverlayInputTransparent();
                 break;
 
@@ -173,6 +191,53 @@ public partial class GameScoringPage : ContentPage
             Y = y,
             IsSuggested3Pt = is3pt
         });
+    }
+
+    /// <summary>
+    /// Shows a ring marker at the exact tapped court location while the shot
+    /// confirmation is open, so the scorer can see where the shot will be logged.
+    /// Removed when PendingShot is cleared (confirm or cancel).
+    /// </summary>
+    private void RenderPendingMarker()
+    {
+        var existing = CourtOverlay.Children
+            .OfType<Border>()
+            .Where(b => b.ClassId == "PendingMarker")
+            .ToList();
+        foreach (var m in existing)
+            CourtOverlay.Children.Remove(m);
+
+        var shot = _vm.PendingShot;
+        if (shot is null) return;
+
+        var color = shot.IsSuggested3Pt
+            ? Color.FromArgb("#fbbf24") : Color.FromArgb("#60a5fa");
+
+        var marker = new Border
+        {
+            ClassId = "PendingMarker",
+            WidthRequest = 28,
+            HeightRequest = 28,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            BackgroundColor = Color.FromArgb("#22ffffff"),
+            Stroke = color,
+            StrokeThickness = 2.5,
+            InputTransparent = true,
+            Content = new BoxView
+            {
+                WidthRequest = 6,
+                HeightRequest = 6,
+                CornerRadius = 3,
+                Color = color,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            }
+        };
+
+        AbsoluteLayout.SetLayoutBounds(marker, new Rect(shot.X, shot.Y,
+            AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+        AbsoluteLayout.SetLayoutFlags(marker, Microsoft.Maui.Layouts.AbsoluteLayoutFlags.PositionProportional);
+        CourtOverlay.Children.Add(marker);
     }
 
     private void RenderShotDots()
