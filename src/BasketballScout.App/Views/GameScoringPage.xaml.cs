@@ -26,11 +26,16 @@ public partial class GameScoringPage : ContentPage
         // React to VM property changes
         _vm.PropertyChanged += OnVmPropertyChanged;
 
-        // Show a toast describing what an undo removed
+        // Brief toasts: what an undo removed (US-4), and what a stat tap logged (US-8)
         _vm.ActionUndone += OnActionUndone;
+        _vm.ActionRecorded += OnActionRecorded;
     }
 
-    private async void OnActionUndone(string message)
+    private void OnActionUndone(string message) => ShowToast(message);
+
+    private void OnActionRecorded(string message) => ShowToast($"✓ {message}");
+
+    private async void ShowToast(string message)
     {
         try
         {
@@ -77,12 +82,14 @@ public partial class GameScoringPage : ContentPage
     }
 
     /// <summary>
-    /// When a popup is showing, make the court overlay pass-through so
-    /// the popup buttons (and stat bar) can receive taps.
+    /// Make the court overlay pass-through only while a follow-up (assist/rebound)
+    /// popup is showing. While a shot is pending we keep the overlay tappable so the
+    /// scorer can re-tap the court to reposition the shot (US-9); the confirm popup
+    /// sits on a higher ZIndex, so its buttons still receive taps.
     /// </summary>
     private void UpdateOverlayInputTransparent()
     {
-        CourtOverlay.InputTransparent = _vm.PendingShot is not null || _vm.FollowUp is not null;
+        CourtOverlay.InputTransparent = _vm.FollowUp is not null;
     }
 
     /// <summary>
@@ -164,7 +171,9 @@ public partial class GameScoringPage : ContentPage
 
     private void OnCourtTapped(object? sender, TappedEventArgs e)
     {
-        if (_vm.SelectedPlayer is null || _vm.FollowUp is not null || _vm.PendingShot is not null)
+        // Allow taps while a shot is pending so the location can be repositioned
+        // (US-9). Block only when no player is selected or a follow-up is open.
+        if (_vm.SelectedPlayer is null || _vm.FollowUp is not null)
             return;
 
         var position = e.GetPosition(CourtOverlay);
