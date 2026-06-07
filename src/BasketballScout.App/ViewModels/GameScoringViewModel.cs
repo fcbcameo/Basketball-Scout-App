@@ -28,7 +28,11 @@ public partial class GameScoringViewModel : ObservableObject
     public partial int AwayScore { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PeriodLabel))]
     public partial int Quarter { get; set; } = 1;
+
+    /// <summary>"Q1".."Q4" for regulation, then "OT1", "OT2", … with no cap.</summary>
+    public string PeriodLabel => Quarter <= 4 ? $"Q{Quarter}" : $"OT{Quarter - 4}";
 
     [ObservableProperty]
     public partial int HomeFouls { get; set; }
@@ -45,8 +49,12 @@ public partial class GameScoringViewModel : ObservableObject
 
     public string ClockColor => IsClockRunning ? "#4ade80" : "#ddd";
 
-    private const int QuarterLengthSeconds = 600;
+    private const int QuarterLengthSeconds = 600;   // 10:00 regulation
+    private const int OvertimeLengthSeconds = 300;   // 5:00 overtime
     private int _clockSeconds = QuarterLengthSeconds;
+
+    private static int PeriodLengthSeconds(int quarter) =>
+        quarter >= 5 ? OvertimeLengthSeconds : QuarterLengthSeconds;
     private readonly System.Timers.Timer _clockTimer = new(1000) { AutoReset = true };
 
     // ── Teams ──
@@ -658,13 +666,11 @@ public partial class GameScoringViewModel : ObservableObject
     [RelayCommand]
     private void NextQuarter()
     {
-        if (Quarter < 6) // up to 2 OT
-        {
-            Quarter++;
-            StopClock();
-            _clockSeconds = QuarterLengthSeconds;
-            GameClock = FormatClock(_clockSeconds);
-        }
+        // No cap — periods 5+ are overtime (OT1, OT2, …) with a 5:00 clock.
+        Quarter++;
+        StopClock();
+        _clockSeconds = PeriodLengthSeconds(Quarter);
+        GameClock = FormatClock(_clockSeconds);
     }
 
     // ── Game clock ──
