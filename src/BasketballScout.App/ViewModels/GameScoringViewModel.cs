@@ -366,6 +366,11 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Quick stats ──
+    /// <summary>Raised after a free throw or non-shot stat is recorded, with a short
+    /// description for the view to flash as a confirmation toast (US-8). Field goals
+    /// are intentionally excluded — they get a court marker dot instead.</summary>
+    public event Action<string>? ActionRecorded;
+
     [RelayCommand]
     private async Task RecordFreeThrowAsync(bool made)
     {
@@ -390,6 +395,7 @@ public partial class GameScoringViewModel : ObservableObject
         }
 
         AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — FT {(made ? "Made" : "Miss")}", isHome);
+        ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
     [RelayCommand]
@@ -428,6 +434,7 @@ public partial class GameScoringViewModel : ObservableObject
         }
 
         AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome);
+        ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
     // ── Undo ──
