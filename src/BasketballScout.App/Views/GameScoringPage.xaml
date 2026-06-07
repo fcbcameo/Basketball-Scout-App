@@ -9,7 +9,7 @@
              Shell.NavBarIsVisible="False"
              BackgroundColor="#0a0a0a">
 
-    <Grid RowDefinitions="40,*" BackgroundColor="#0a0a0a">
+    <Grid RowDefinitions="50,*" BackgroundColor="#0a0a0a">
 
         <!-- ═══════════════════════════════════════════════ -->
         <!-- ROW 0: SCOREBOARD BAR                           -->
@@ -41,13 +41,13 @@
                            TextColor="{Binding ClockColor}" VerticalOptions="Center" />
                 </Border>
                 <Button Text="Q+" Command="{Binding NextQuarterCommand}"
-                        FontSize="9" FontAttributes="Bold" Padding="6,2"
-                        BackgroundColor="#1a1a1a" TextColor="#666" CornerRadius="3"
-                        HeightRequest="24" MinimumHeightRequest="24" />
-                <Button Text="UNDO" Command="{Binding UndoCommand}"
-                        FontSize="9" FontAttributes="Bold" Padding="6,2"
-                        BackgroundColor="#2a1515" TextColor="#f87171" CornerRadius="3"
-                        HeightRequest="24" MinimumHeightRequest="24" />
+                        FontSize="12" FontAttributes="Bold" Padding="12,4"
+                        BackgroundColor="#1a1a1a" TextColor="#888" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="44" />
+                <Button Text="↶ UNDO" Command="{Binding UndoCommand}"
+                        FontSize="13" FontAttributes="Bold" Padding="14,4"
+                        BackgroundColor="#3a1a1a" TextColor="#f87171" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="64" />
             </HorizontalStackLayout>
 
             <!-- Away Score -->
@@ -186,7 +186,7 @@
                             StrokeShape="RoundRectangle 10"
                             Stroke="#e85d2655" StrokeThickness="1"
                             HorizontalOptions="Center" VerticalOptions="End"
-                            WidthRequest="280"
+                            WidthRequest="300"
                             ZIndex="10">
                         <VerticalStackLayout Spacing="6">
                             <Grid ColumnDefinitions="*,Auto">
@@ -207,28 +207,28 @@
                                 <VerticalStackLayout Spacing="3">
                                     <Label Text="2PT" FontSize="8" FontAttributes="Bold"
                                            TextColor="#555" HorizontalOptions="Center" CharacterSpacing="1" />
-                                    <Button Text="MADE" FontSize="13" FontAttributes="Bold"
+                                    <Button Text="MADE" FontSize="16" FontAttributes="Bold"
                                             BackgroundColor="#4ade8018" TextColor="#4ade80"
-                                            CornerRadius="6" Padding="0,10"
+                                            CornerRadius="6" Padding="0,16"
                                             BorderColor="#4ade8033" BorderWidth="1"
                                             Clicked="On2PtMadeClicked" />
-                                    <Button Text="MISS" FontSize="13" FontAttributes="Bold"
+                                    <Button Text="MISS" FontSize="16" FontAttributes="Bold"
                                             BackgroundColor="#f8717118" TextColor="#f87171"
-                                            CornerRadius="6" Padding="0,10"
+                                            CornerRadius="6" Padding="0,16"
                                             BorderColor="#f8717133" BorderWidth="1"
                                             Clicked="On2PtMissClicked" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Column="1" Spacing="3">
                                     <Label Text="3PT" FontSize="8" FontAttributes="Bold"
                                            TextColor="#555" HorizontalOptions="Center" CharacterSpacing="1" />
-                                    <Button Text="MADE" FontSize="13" FontAttributes="Bold"
+                                    <Button Text="MADE" FontSize="16" FontAttributes="Bold"
                                             BackgroundColor="#4ade8018" TextColor="#4ade80"
-                                            CornerRadius="6" Padding="0,10"
+                                            CornerRadius="6" Padding="0,16"
                                             BorderColor="#4ade8033" BorderWidth="1"
                                             Clicked="On3PtMadeClicked" />
-                                    <Button Text="MISS" FontSize="13" FontAttributes="Bold"
+                                    <Button Text="MISS" FontSize="16" FontAttributes="Bold"
                                             BackgroundColor="#f8717118" TextColor="#f87171"
-                                            CornerRadius="6" Padding="0,10"
+                                            CornerRadius="6" Padding="0,16"
                                             BorderColor="#f8717133" BorderWidth="1"
                                             Clicked="On3PtMissClicked" />
                                 </VerticalStackLayout>
@@ -256,20 +256,21 @@
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="models:Player">
                                         <Button Text="{Binding JerseyNumber, StringFormat='#{0}'}"
-                                                FontSize="12" FontAttributes="Bold"
-                                                BackgroundColor="#1e1e1e" TextColor="#ccc"
+                                                FontSize="16" FontAttributes="Bold"
+                                                BackgroundColor="#1e1e1e" TextColor="#ddd"
                                                 BorderColor="#333" BorderWidth="1"
-                                                CornerRadius="5" Padding="10,6"
-                                                Margin="0,0,3,3"
-                                                HeightRequest="34" MinimumHeightRequest="34"
+                                                CornerRadius="6" Padding="14,9"
+                                                Margin="0,0,4,4"
+                                                HeightRequest="46" MinimumHeightRequest="46" MinimumWidthRequest="52"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
                                                 CommandParameter="{Binding .}" />
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </FlexLayout>
-                            <Button Text="SKIP" FontSize="9" FontAttributes="Bold"
-                                    BackgroundColor="#141414" TextColor="#444"
-                                    CornerRadius="5" Padding="8,6"
+                            <Button Text="SKIP" FontSize="12" FontAttributes="Bold"
+                                    BackgroundColor="#141414" TextColor="#666"
+                                    CornerRadius="6" Padding="14,9"
+                                    HeightRequest="40" MinimumHeightRequest="40"
                                     Command="{Binding SkipFollowUpCommand}" />
                         </VerticalStackLayout>
                     </Border>
@@ -278,68 +279,68 @@
                 <!-- ── Quick Stat Bar ── -->
                 <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
                             BackgroundColor="#0e0e0e" Padding="6,4">
-                    <HorizontalStackLayout Spacing="3">
+                    <HorizontalStackLayout Spacing="5">
                         <!-- FT label -->
-                        <Label Text="FT" FontSize="8" FontAttributes="Bold" TextColor="#444"
+                        <Label Text="FT" FontSize="10" FontAttributes="Bold" TextColor="#555"
                                CharacterSpacing="1" VerticalOptions="Center" Margin="4,0" />
-                        <Button Text="V" FontSize="11" FontAttributes="Bold"
+                        <Button Text="✓" FontSize="16" FontAttributes="Bold"
                                 BackgroundColor="#4ade8012" TextColor="#4ade80"
                                 BorderColor="#4ade8022" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="18,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnFTMadeClicked" />
-                        <Button Text="X" FontSize="11" FontAttributes="Bold"
+                        <Button Text="✗" FontSize="16" FontAttributes="Bold"
                                 BackgroundColor="#f8717112" TextColor="#f87171"
                                 BorderColor="#f8717122" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="18,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnFTMissClicked" />
 
-                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
+                        <BoxView WidthRequest="1" HeightRequest="30" Color="#1a1a1a" VerticalOptions="Center" Margin="3,0" />
 
-                        <Button Text="AST" FontSize="10" FontAttributes="Bold"
+                        <Button Text="AST" FontSize="14" FontAttributes="Bold"
                                 BackgroundColor="#141414" TextColor="#60a5fa"
                                 BorderColor="#1e1e1e" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnAstClicked" />
-                        <Button Text="STL" FontSize="10" FontAttributes="Bold"
+                        <Button Text="STL" FontSize="14" FontAttributes="Bold"
                                 BackgroundColor="#141414" TextColor="#c084fc"
                                 BorderColor="#1e1e1e" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnStlClicked" />
-                        <Button Text="BLK" FontSize="10" FontAttributes="Bold"
+                        <Button Text="BLK" FontSize="14" FontAttributes="Bold"
                                 BackgroundColor="#141414" TextColor="#f472b6"
                                 BorderColor="#1e1e1e" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnBlkClicked" />
-                        <Button Text="TO" FontSize="10" FontAttributes="Bold"
+                        <Button Text="TO" FontSize="14" FontAttributes="Bold"
                                 BackgroundColor="#141414" TextColor="#fb923c"
                                 BorderColor="#1e1e1e" BorderWidth="1"
-                                CornerRadius="5" Padding="10,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnToClicked" />
 
-                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
+                        <BoxView WidthRequest="1" HeightRequest="30" Color="#1a1a1a" VerticalOptions="Center" Margin="3,0" />
 
-                        <Button Text="O-RB" FontSize="9" FontAttributes="Bold"
+                        <Button Text="O-RB" FontSize="12" FontAttributes="Bold"
                                 BackgroundColor="#fbbf2410" TextColor="#fbbf24"
                                 BorderColor="#fbbf2420" BorderWidth="1"
-                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="14,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnOrebClicked" />
-                        <Button Text="D-RB" FontSize="9" FontAttributes="Bold"
+                        <Button Text="D-RB" FontSize="12" FontAttributes="Bold"
                                 BackgroundColor="#60a5fa10" TextColor="#60a5fa"
                                 BorderColor="#60a5fa20" BorderWidth="1"
-                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="14,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnDrebClicked" />
 
-                        <BoxView WidthRequest="1" HeightRequest="20" Color="#1a1a1a" VerticalOptions="Center" Margin="2,0" />
+                        <BoxView WidthRequest="1" HeightRequest="30" Color="#1a1a1a" VerticalOptions="Center" Margin="3,0" />
 
-                        <Button Text="PF" FontSize="9" FontAttributes="Bold"
+                        <Button Text="PF" FontSize="13" FontAttributes="Bold"
                                 BackgroundColor="#fbbf2410" TextColor="#fbbf24"
                                 BorderColor="#fbbf2420" BorderWidth="1"
-                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnPfClicked" />
-                        <Button Text="TF" FontSize="9" FontAttributes="Bold"
+                        <Button Text="TF" FontSize="13" FontAttributes="Bold"
                                 BackgroundColor="#f8717110" TextColor="#f87171"
                                 BorderColor="#f8717120" BorderWidth="1"
-                                CornerRadius="5" Padding="8,5" HeightRequest="30" MinimumHeightRequest="30"
+                                CornerRadius="6" Padding="16,12" HeightRequest="48" MinimumHeightRequest="48"
                                 Clicked="OnTechClicked" />
                     </HorizontalStackLayout>
                 </ScrollView>
