@@ -120,14 +120,53 @@ Enhance the existing season games list (`SeasonStatsPage`) into a clear matches 
 
 ---
 
-## Suggested implementation order
+## US-8 — Quick-action confirmation feedback 💬
+**Priority:** Medium · **Size:** S · **Type:** Feature
 
-1. **US-1** — PDF bug (blocks a shipped feature; do before US-7 which also touches the PDF).
-2. **US-2 + US-3 + US-4** — small, high-value scoring-screen UX (can ship together as a "scoring polish" pass).
-3. **US-5** — corrections screen (builds on US-4's event-removal logic).
-4. **US-7** — overtime (touches box score + PDF, so after US-1).
-5. **US-6** — matches overview.
+**As a** scorer, **I want** a brief on-screen confirmation of the stat I just recorded, **so that** I can trust the tap registered without looking away from the game.
+
+**Acceptance criteria**
+- After recording a free throw or any non-shot stat (AST, STL, BLK, TO, O-RB, D-RB, PF, TF), a small confirmation appears naming what was logged (e.g. *"Steal — #1 Wemby"*, *"Personal Foul — #11 Brunson"*).
+- It is non-blocking (does not interrupt or capture taps), and disappears on its own after ~1–2 seconds.
+- **Field goals (2PT/3PT) are excluded** — they already get a marker dot on the court, so no toast for them (avoids double feedback).
+- Rapid successive taps stay readable (latest action clearly shown; queued/short toasts are acceptable).
+
+**Technical notes**
+Reuse the CommunityToolkit.Maui `Toast` already wired for undo (US-4). Emit a toast from `RecordStatAsync` / `RecordFreeThrowAsync` in `GameScoringViewModel` (or via the existing description helper `DescribeEvent`). Skip the shot-confirm path. Consider a very short duration; if queued toasts feel laggy under rapid entry, fall back to a single in-place transient label near the stat bar.
+
+---
+
+## US-9 — Reposition a pending shot by tapping the court 🎯
+**Priority:** Medium · **Size:** S · **Type:** Feature
+
+**As a** scorer, **I want** to move an in-progress shot by tapping a new spot on the court, **so that** I can correct the location without closing the made/miss menu first.
+
+**Acceptance criteria**
+- With the made/miss confirmation open (a pending shot placed), tapping anywhere else on the court **moves** the pending shot to the new point.
+- The live marker jumps to the new spot and the suggested **2PT/3PT** zone re-evaluates for the new location.
+- The confirmation menu stays open throughout; only confirming (made/miss) or the explicit cancel (✕) dismisses it.
+- Tapping the menu's own buttons still confirms as today (not treated as a reposition).
+
+**Technical notes**
+Builds on US-2's live marker. In `GameScoringPage.xaml.cs`, `OnCourtTapped` currently returns early when `PendingShot is not null`; allow re-taps to update `PendingShot` instead (keep the overlay tappable while a shot is pending — but not while a follow-up is open). Re-run the 3PT detection and refresh the marker/zone label. The confirm popup is anchored bottom-center, so it won't intercept court taps.
+
+---
+
+## Status
+
+- ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
+- ✅ **US-2** — Live shot-placement marker (PR #22, merged).
+- ✅ **US-3** — Larger in-game buttons (PR #22, merged).
+- ✅ **US-4** — Prominent general undo with feedback (PR #22, merged).
+- ⬜ **US-5, US-6, US-7, US-8, US-9** — open.
+
+## Suggested implementation order (remaining)
+
+1. **US-8 + US-9** — small scoring-screen follow-ups; both reuse the toast (US-4) and live marker (US-2) just shipped. Quick to batch together.
+2. **US-5** — in-match quick corrections (builds on US-4's event-removal logic).
+3. **US-7** — overtime (touches box score + the PDF).
+4. **US-6** — matches overview.
 
 **Dependencies / sequencing rationale**
-- US-1 before US-7: both touch the PDF; fixing the resolver first avoids rework.
+- US-8 reuses the `Toast` + `DescribeEvent` from US-4; US-9 extends US-2's marker — both are cheap now that their foundations exist.
 - US-4 before US-5: both manipulate `StatEvent`s; undo gives corrections a foundation.
