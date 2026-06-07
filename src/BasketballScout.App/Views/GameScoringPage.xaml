@@ -48,6 +48,10 @@
                         FontSize="13" FontAttributes="Bold" Padding="14,4"
                         BackgroundColor="#3a1a1a" TextColor="#f87171" CornerRadius="4"
                         HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="64" />
+                <Button Text="✎ FIX" Command="{Binding ToggleCorrectionsCommand}"
+                        FontSize="13" FontAttributes="Bold" Padding="14,4"
+                        BackgroundColor="#1a2336" TextColor="#60a5fa" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="56" />
             </HorizontalStackLayout>
 
             <!-- Away Score -->
@@ -428,6 +432,105 @@
                 </ScrollView>
             </Grid>
 
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- CORRECTIONS DRAWER (US-5)                        -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <Grid Grid.RowSpan="2" IsVisible="{Binding IsCorrectionsOpen}"
+              BackgroundColor="#cc000000" ZIndex="100">
+            <!-- Tap the backdrop to close -->
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CloseCorrectionsCommand}" />
+            </Grid.GestureRecognizers>
+
+            <Border BackgroundColor="#121212" StrokeShape="RoundRectangle 12"
+                    Stroke="#262626" StrokeThickness="1"
+                    HorizontalOptions="Center" VerticalOptions="Center"
+                    WidthRequest="540" MaximumHeightRequest="620" Margin="16">
+                <!-- Swallow taps so tapping the panel doesn't close the drawer -->
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer />
+                </Border.GestureRecognizers>
+
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Header -->
+                    <Grid ColumnDefinitions="*,Auto" Padding="16,12" BackgroundColor="#161616">
+                        <Label Text="CORRECTIONS" FontSize="13" FontAttributes="Bold"
+                               TextColor="#ddd" CharacterSpacing="2" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="Done" Command="{Binding CloseCorrectionsCommand}"
+                                FontSize="13" FontAttributes="Bold" Padding="18,6"
+                                BackgroundColor="#1f2937" TextColor="#9ca3af" CornerRadius="6"
+                                HeightRequest="38" MinimumHeightRequest="38" />
+                    </Grid>
+
+                    <ScrollView Grid.Row="1" Padding="16,8,16,16">
+                        <VerticalStackLayout Spacing="6">
+
+                            <!-- Adjust fouls -->
+                            <Label Text="ADJUST FOULS (ON-COURT)" FontSize="10" FontAttributes="Bold"
+                                   TextColor="#666" CharacterSpacing="1" Margin="0,4,0,2" />
+                            <VerticalStackLayout Spacing="3"
+                                                 BindableLayout.ItemsSource="{Binding FoulRows}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PlayerFoulRow">
+                                        <Border BackgroundColor="#181818" StrokeShape="RoundRectangle 6"
+                                                Stroke="#222" StrokeThickness="1" Padding="10,5">
+                                            <Grid ColumnDefinitions="*,Auto,44,Auto" ColumnSpacing="6">
+                                                <Label Text="{Binding Label}" FontSize="13" FontAttributes="Bold"
+                                                       TextColor="{Binding Color}" VerticalOptions="Center"
+                                                       LineBreakMode="TailTruncation" />
+                                                <Button Grid.Column="1" Text="−" FontSize="20" FontAttributes="Bold"
+                                                        BackgroundColor="#2a1515" TextColor="#f87171" CornerRadius="6"
+                                                        Padding="0" WidthRequest="44" HeightRequest="44"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=RemoveFoulCommand}"
+                                                        CommandParameter="{Binding Player}" />
+                                                <Label Grid.Column="2" Text="{Binding Fouls}" FontSize="17" FontAttributes="Bold"
+                                                       TextColor="#eee" HorizontalTextAlignment="Center" VerticalOptions="Center" />
+                                                <Button Grid.Column="3" Text="+" FontSize="20" FontAttributes="Bold"
+                                                        BackgroundColor="#152a15" TextColor="#4ade80" CornerRadius="6"
+                                                        Padding="0" WidthRequest="44" HeightRequest="44"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=AddFoulCommand}"
+                                                        CommandParameter="{Binding Player}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+
+                            <BoxView HeightRequest="1" Color="#222" Margin="0,8" />
+
+                            <!-- Recent events -->
+                            <Label Text="RECENT EVENTS — TAP ✕ TO DELETE" FontSize="10" FontAttributes="Bold"
+                                   TextColor="#666" CharacterSpacing="1" Margin="0,0,0,2" />
+                            <VerticalStackLayout Spacing="3"
+                                                 BindableLayout.ItemsSource="{Binding RecentEvents}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:CorrectionEntry">
+                                        <Border BackgroundColor="#181818" StrokeShape="RoundRectangle 6"
+                                                Stroke="#222" StrokeThickness="1" Padding="10,5">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                                <Label Text="{Binding PlayerLabel}" FontSize="12" FontAttributes="Bold"
+                                                       TextColor="{Binding Color}" VerticalOptions="Center"
+                                                       MinimumWidthRequest="96" LineBreakMode="TailTruncation" />
+                                                <Label Grid.Column="1" Text="{Binding Description}" FontSize="12"
+                                                       TextColor="#ccc" VerticalOptions="Center" />
+                                                <Label Grid.Column="2" Text="{Binding Meta}" FontSize="10"
+                                                       TextColor="#555" VerticalOptions="Center" />
+                                                <Button Grid.Column="3" Text="✕" FontSize="15" FontAttributes="Bold"
+                                                        BackgroundColor="#2a1515" TextColor="#f87171" CornerRadius="6"
+                                                        Padding="0" WidthRequest="44" HeightRequest="44"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=DeleteEventCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </ScrollView>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 

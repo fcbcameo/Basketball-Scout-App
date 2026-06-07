@@ -84,6 +84,9 @@ public partial class GameScoringViewModel : ObservableObject
     [ObservableProperty]
     public partial FollowUpState? FollowUp { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsCorrectionsOpen { get; set; }
+
     // ── Collections ──
     public ObservableCollection<Player> HomeOnCourt { get; } = new();
     public ObservableCollection<Player> HomeBench { get; } = new();
@@ -92,6 +95,8 @@ public partial class GameScoringViewModel : ObservableObject
     public ObservableCollection<ShotDot> ShotChartDots { get; } = new();
     public ObservableCollection<PlayLogEntry> PlayLog { get; } = new();
     public ObservableCollection<Player> FollowUpCandidates { get; } = new();
+    public ObservableCollection<CorrectionEntry> RecentEvents { get; } = new();
+    public ObservableCollection<PlayerFoulRow> FoulRows { get; } = new();
 
     // ── Query property helpers ──
     // All three query properties must be applied before we can hydrate the rosters,
@@ -271,9 +276,11 @@ public partial class GameScoringViewModel : ObservableObject
         };
         await _statEventRepository.AddAsync(statEvent);
 
-        // Shot chart dot
+        // Shot chart dot (tagged with the event id so it can be removed precisely
+        // on undo or via the corrections drawer)
         ShotChartDots.Add(new ShotDot
         {
+            EventId = statEvent.Id,
             X = PendingShot.X,
             Y = PendingShot.Y,
             IsMade = confirmation.IsMade,
@@ -459,35 +466,7 @@ public partial class GameScoringViewModel : ObservableObject
             return;
         }
 
-        bool isHome = _allHomePlayers.Any(p => p.Id == last.PlayerId);
-
-        // Reverse score impact
-        if (last.ShotResult == ShotResult.Made)
-        {
-            int pts = last.StatType switch
-            {
-                StatType.Points2 => 2,
-                StatType.Points3 => 3,
-                StatType.FreeThrow => 1,
-                _ => 0
-            };
-            if (isHome) HomeScore = Math.Max(0, HomeScore - pts);
-            else AwayScore = Math.Max(0, AwayScore - pts);
-        }
-
-        // Reverse foul impact
-        if (last.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
-        {
-            if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
-            else AwayFouls = Math.Max(0, AwayFouls - 1);
-        }
-
-        // Remove the matching shot-chart dot if it was a field goal
-        if (last.StatType is StatType.Points2 or StatType.Points3 && ShotChartDots.Count > 0)
-        {
-            ShotChartDots.RemoveAt(ShotChartDots.Count - 1);
-        }
-
+        ApplyReversal(last);
         string description = DescribeEvent(last);
 
         await _statEventRepository.DeleteAsync(last.Id);
@@ -502,33 +481,178 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     /// <summary>Builds a short label like "#1 Wemby — 2PT Made" for play log / undo feedback.</summary>
-    private string DescribeEvent(StatEvent e)
+    private string DescribeEvent(StatEvent e) => $"{PlayerLabel(e.PlayerId)} — {DescribeStat(e)}";
+
+    /// <summary>"#1 Wemby" for a player id (or "Player" if not found).</summary>
+    private string PlayerLabel(int playerId)
     {
-        var player = _allHomePlayers.Concat(_allAwayPlayers)
-            .FirstOrDefault(p => p.Id == e.PlayerId);
-        string who = player is not null ? $"#{player.JerseyNumber} {player.Name}" : "Player";
-
-        string what = e.StatType switch
-        {
-            StatType.Points2 => $"2PT {ShotResultText(e)}",
-            StatType.Points3 => $"3PT {ShotResultText(e)}",
-            StatType.FreeThrow => $"FT {ShotResultText(e)}",
-            StatType.Assist => "Assist",
-            StatType.Steal => "Steal",
-            StatType.Block => "Block",
-            StatType.Turnover => "Turnover",
-            StatType.OffensiveRebound => "OFF Rebound",
-            StatType.DefensiveRebound => "DEF Rebound",
-            StatType.PersonalFoul => "Personal Foul",
-            StatType.TechnicalFoul => "Technical Foul",
-            _ => e.StatType.ToString()
-        };
-
-        return $"{who} — {what}";
+        var p = _allHomePlayers.Concat(_allAwayPlayers).FirstOrDefault(x => x.Id == playerId);
+        return p is not null ? $"#{p.JerseyNumber} {p.Name}" : "Player";
     }
+
+    /// <summary>"2PT Made", "Steal", "Personal Foul"… — the action without the player.</summary>
+    private static string DescribeStat(StatEvent e) => e.StatType switch
+    {
+        StatType.Points2 => $"2PT {ShotResultText(e)}",
+        StatType.Points3 => $"3PT {ShotResultText(e)}",
+        StatType.FreeThrow => $"FT {ShotResultText(e)}",
+        StatType.Assist => "Assist",
+        StatType.Steal => "Steal",
+        StatType.Block => "Block",
+        StatType.Turnover => "Turnover",
+        StatType.OffensiveRebound => "OFF Rebound",
+        StatType.DefensiveRebound => "DEF Rebound",
+        StatType.PersonalFoul => "Personal Foul",
+        StatType.TechnicalFoul => "Technical Foul",
+        _ => e.StatType.ToString()
+    };
 
     private static string ShotResultText(StatEvent e) =>
         e.ShotResult == ShotResult.Made ? "Made" : "Miss";
+
+    /// <summary>
+    /// Reverses the score / team-foul / shot-dot impact of a single event.
+    /// Shared by undo (US-4) and the corrections drawer (US-5).
+    /// </summary>
+    private void ApplyReversal(StatEvent e)
+    {
+        bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+
+        if (e.ShotResult == ShotResult.Made)
+        {
+            int pts = e.StatType switch
+            {
+                StatType.Points2 => 2,
+                StatType.Points3 => 3,
+                StatType.FreeThrow => 1,
+                _ => 0
+            };
+            if (isHome) HomeScore = Math.Max(0, HomeScore - pts);
+            else AwayScore = Math.Max(0, AwayScore - pts);
+        }
+
+        if (e.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
+        {
+            if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
+            else AwayFouls = Math.Max(0, AwayFouls - 1);
+        }
+
+        if (e.StatType is StatType.Points2 or StatType.Points3)
+        {
+            var dot = ShotChartDots.FirstOrDefault(d => d.EventId == e.Id);
+            if (dot is not null) ShotChartDots.Remove(dot);
+        }
+    }
+
+    // ── In-match corrections (US-5) ──
+    [RelayCommand]
+    private async Task ToggleCorrectionsAsync()
+    {
+        IsCorrectionsOpen = !IsCorrectionsOpen;
+        if (IsCorrectionsOpen)
+        {
+            // Avoid clashing with shot placement while the drawer is open.
+            SelectedPlayer = null;
+            PendingShot = null;
+            await RefreshCorrectionsAsync();
+        }
+    }
+
+    [RelayCommand]
+    private void CloseCorrections() => IsCorrectionsOpen = false;
+
+    [RelayCommand]
+    private async Task DeleteEventAsync(CorrectionEntry? entry)
+    {
+        if (entry is null) return;
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        var e = events.FirstOrDefault(x => x.Id == entry.EventId);
+        if (e is null) return;
+
+        ApplyReversal(e);
+        await _statEventRepository.DeleteAsync(e.Id);
+        await RefreshCorrectionsAsync();
+    }
+
+    [RelayCommand]
+    private async Task AddFoulAsync(Player? player)
+    {
+        if (player is null) return;
+        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
+
+        await _statEventRepository.AddAsync(new StatEvent
+        {
+            GameId = GameId,
+            PlayerId = player.Id,
+            StatType = StatType.PersonalFoul,
+            Quarter = Quarter,
+            GameClock = GameClock,
+            Timestamp = DateTime.UtcNow
+        });
+
+        if (isHome) HomeFouls++; else AwayFouls++;
+        await RefreshCorrectionsAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveFoulAsync(Player? player)
+    {
+        if (player is null) return;
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        var lastFoul = events
+            .Where(x => x.PlayerId == player.Id
+                && (x.StatType == StatType.PersonalFoul || x.StatType == StatType.TechnicalFoul))
+            .OrderByDescending(x => x.Timestamp)
+            .FirstOrDefault();
+        if (lastFoul is null) return;
+
+        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
+        if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
+        else AwayFouls = Math.Max(0, AwayFouls - 1);
+
+        await _statEventRepository.DeleteAsync(lastFoul.Id);
+        await RefreshCorrectionsAsync();
+    }
+
+    private async Task RefreshCorrectionsAsync()
+    {
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        var realEvents = events
+            .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
+            .OrderByDescending(e => e.Timestamp)
+            .ToList();
+
+        // Recent events (deletable)
+        RecentEvents.Clear();
+        foreach (var e in realEvents.Take(25))
+        {
+            bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+            RecentEvents.Add(new CorrectionEntry
+            {
+                EventId = e.Id,
+                PlayerLabel = PlayerLabel(e.PlayerId),
+                Description = DescribeStat(e),
+                Meta = $"Q{e.Quarter} {e.GameClock}",
+                Color = isHome ? HomeTeamColor : AwayTeamColor
+            });
+        }
+
+        // Per-player foul counters for on-court players (both teams)
+        FoulRows.Clear();
+        foreach (var p in HomeOnCourt.Concat(AwayOnCourt))
+        {
+            bool isHome = _allHomePlayers.Any(x => x.Id == p.Id);
+            int fouls = realEvents.Count(e => e.PlayerId == p.Id
+                && (e.StatType == StatType.PersonalFoul || e.StatType == StatType.TechnicalFoul));
+            FoulRows.Add(new PlayerFoulRow
+            {
+                Player = p,
+                Label = $"#{p.JerseyNumber} {p.Name}",
+                Fouls = fouls,
+                Color = isHome ? HomeTeamColor : AwayTeamColor
+            });
+        }
+    }
 
     // ── Quarter management ──
     [RelayCommand]
@@ -664,10 +788,28 @@ public class ShotConfirmation
 
 public class ShotDot
 {
+    public int EventId { get; set; }
     public float X { get; set; }
     public float Y { get; set; }
     public bool IsMade { get; set; }
     public string Label { get; set; } = string.Empty;
+}
+
+public class CorrectionEntry
+{
+    public int EventId { get; set; }
+    public string PlayerLabel { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Meta { get; set; } = string.Empty;
+    public string Color { get; set; } = "#888";
+}
+
+public class PlayerFoulRow
+{
+    public Player Player { get; set; } = null!;
+    public string Label { get; set; } = string.Empty;
+    public int Fouls { get; set; }
+    public string Color { get; set; } = "#888";
 }
 
 public class FollowUpState
