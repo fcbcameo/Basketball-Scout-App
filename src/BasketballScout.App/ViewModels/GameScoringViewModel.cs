@@ -10,6 +10,7 @@ namespace BasketballScout.App.ViewModels;
 [QueryProperty(nameof(GameId), "gameId")]
 [QueryProperty(nameof(HomeActiveIdsString), "homeActiveIds")]
 [QueryProperty(nameof(AwayActiveIdsString), "awayActiveIds")]
+[QueryProperty(nameof(ResumeString), "resume")]
 public partial class GameScoringViewModel : ObservableObject
 {
     private readonly IGameRepository _gameRepository;
@@ -130,12 +131,28 @@ public partial class GameScoringViewModel : ObservableObject
         }
     }
 
+    /// <summary>Set to "1" when navigating in to resume an existing in-progress game (US-10).
+    /// Resume nav carries no active-id lists — the on-court five is reconstructed from
+    /// the game's substitution history instead.</summary>
+    public string ResumeString
+    {
+        set
+        {
+            _resume = value is "1" or "true";
+            TryLoad();
+        }
+    }
+
     private string _homeActiveIdsParsed = string.Empty;
     private string _awayActiveIdsParsed = string.Empty;
     private bool _gameIdSet;
     private bool _homeIdsSet;
     private bool _awayIdsSet;
+    private bool _resume;
     private bool _loaded;
+
+    /// <summary>Intended persisted status; flips to Finished only via Finish Game.</summary>
+    private GameStatus _status = GameStatus.InProgress;
 
     private List<Player> _allHomePlayers = new();
     private List<Player> _allAwayPlayers = new();
@@ -163,7 +180,10 @@ public partial class GameScoringViewModel : ObservableObject
     private void TryLoad()
     {
         if (_loaded) return;
-        if (!_gameIdSet || !_homeIdsSet || !_awayIdsSet) return;
+        if (!_gameIdSet) return;
+        // New game: wait for both active-id lists. Resume: those lists aren't passed,
+        // so the game id alone (plus the resume flag) is enough.
+        if (!_resume && (!_homeIdsSet || !_awayIdsSet)) return;
         _loaded = true;
         _ = LoadGameAsync(GameId);
     }
@@ -186,15 +206,25 @@ public partial class GameScoringViewModel : ObservableObject
         AwayTeamAbbr = awayTeam?.Abbreviation ?? "AWY";
         AwayTeamColor = awayTeam?.Color ?? "#2d7dd2";
 
-        // Parse active IDs
-        var homeActiveIds = _homeActiveIdsParsed.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(int.Parse).ToHashSet();
-        var awayActiveIds = _awayActiveIdsParsed.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(int.Parse).ToHashSet();
+        _status = game.Status;
 
         // Load players
         _allHomePlayers = (await _playerRepository.GetByTeamIdAsync(game.HomeTeamId)).ToList();
         _allAwayPlayers = (await _playerRepository.GetByTeamIdAsync(game.AwayTeamId)).ToList();
+
+        var existing = await _statEventRepository.GetByGameIdAsync(id);
+        bool anySubEvents = existing.Any(e => e.StatType == StatType.SubIn || e.StatType == StatType.SubOut);
+
+        // On-court five: reconstruct from substitution history when resuming a game
+        // that has already been entered; otherwise use the lineup chosen at setup.
+        HashSet<int> homeActiveIds, awayActiveIds;
+        if (anySubEvents)
+            (homeActiveIds, awayActiveIds) = ReconstructOnCourt(existing);
+        else
+        {
+            homeActiveIds = ParseIds(_homeActiveIdsParsed);
+            awayActiveIds = ParseIds(_awayActiveIdsParsed);
+        }
 
         HomeOnCourt.Clear();
         HomeBench.Clear();
@@ -212,12 +242,10 @@ public partial class GameScoringViewModel : ObservableObject
             else AwayBench.Add(p);
         }
 
-        // Persist starting lineup as SubIn events if this game has no sub events yet.
-        // This lets GameStatsService reconstruct minutes and +/- later.
-        var existing = await _statEventRepository.GetByGameIdAsync(id);
-        bool anySubEvents = existing.Any(e => e.StatType == StatType.SubIn || e.StatType == StatType.SubOut);
         if (!anySubEvents)
         {
+            // First entry into a new game: persist the starting lineup as SubIn events
+            // so GameStatsService can reconstruct minutes and +/- later.
             foreach (var p in HomeOnCourt.Concat(AwayOnCourt))
             {
                 await _statEventRepository.AddAsync(new StatEvent
@@ -230,6 +258,103 @@ public partial class GameScoringViewModel : ObservableObject
                     Timestamp = DateTime.UtcNow
                 });
             }
+        }
+        else
+        {
+            // Resume: rebuild score / fouls / shot dots / play log from the events,
+            // and restore the exact clock and period the scorer left off at.
+            RebuildFromEvents(existing);
+            Quarter = Math.Max(1, game.CurrentPeriod);
+            _clockSeconds = Math.Clamp(game.ClockSecondsRemaining, 0, PeriodLengthSeconds(Quarter));
+            GameClock = FormatClock(_clockSeconds);
+            IsClockRunning = false; // always resume paused — never tick while away
+        }
+    }
+
+    private static HashSet<int> ParseIds(string csv) =>
+        csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
+
+    /// <summary>
+    /// Replays the substitution history to determine who is currently on court for each
+    /// team (net of SubIn/SubOut), so a resumed game shows the correct active five.
+    /// </summary>
+    private (HashSet<int> Home, HashSet<int> Away) ReconstructOnCourt(IReadOnlyList<StatEvent> events)
+    {
+        var onCourt = new HashSet<int>();
+        foreach (var e in events
+            .Where(e => e.StatType is StatType.SubIn or StatType.SubOut)
+            .OrderBy(e => e.Timestamp).ThenBy(e => e.Id))
+        {
+            if (e.StatType == StatType.SubIn) onCourt.Add(e.PlayerId);
+            else onCourt.Remove(e.PlayerId);
+        }
+
+        var home = _allHomePlayers.Where(p => onCourt.Contains(p.Id)).Select(p => p.Id).ToHashSet();
+        var away = _allAwayPlayers.Where(p => onCourt.Contains(p.Id)).Select(p => p.Id).ToHashSet();
+        return (home, away);
+    }
+
+    /// <summary>
+    /// Rebuilds in-memory game state (score, team fouls, shot-chart dots, play log) by
+    /// replaying the persisted stat events. Used when resuming an in-progress game.
+    /// </summary>
+    private void RebuildFromEvents(IReadOnlyList<StatEvent> events)
+    {
+        HomeScore = 0;
+        AwayScore = 0;
+        HomeFouls = 0;
+        AwayFouls = 0;
+        ShotChartDots.Clear();
+        PlayLog.Clear();
+
+        var ordered = events
+            .Where(e => e.StatType is not StatType.SubIn and not StatType.SubOut)
+            .OrderBy(e => e.Timestamp).ThenBy(e => e.Id)
+            .ToList();
+
+        foreach (var e in ordered)
+        {
+            bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+
+            if (e.ShotResult == ShotResult.Made)
+            {
+                int pts = e.StatType switch
+                {
+                    StatType.Points2 => 2,
+                    StatType.Points3 => 3,
+                    StatType.FreeThrow => 1,
+                    _ => 0
+                };
+                if (isHome) HomeScore += pts; else AwayScore += pts;
+            }
+
+            if (e.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
+            {
+                if (isHome) HomeFouls++; else AwayFouls++;
+            }
+
+            if (e.StatType is StatType.Points2 or StatType.Points3 && e.CourtX.HasValue && e.CourtY.HasValue)
+            {
+                ShotChartDots.Add(new ShotDot
+                {
+                    EventId = e.Id,
+                    X = e.CourtX.Value,
+                    Y = e.CourtY.Value,
+                    IsMade = e.ShotResult == ShotResult.Made,
+                    Label = e.StatType == StatType.Points3 ? "3" : "2"
+                });
+            }
+
+            // Newest-first log; preserve each event's own period/clock rather than the
+            // current ones (inserting at 0 while iterating oldest→newest yields that order).
+            PlayLog.Insert(0, new PlayLogEntry
+            {
+                Message = DescribeEvent(e),
+                Quarter = e.Quarter,
+                GameClock = e.GameClock,
+                IsHome = isHome,
+                Timestamp = e.Timestamp
+            });
         }
     }
 
@@ -671,13 +796,46 @@ public partial class GameScoringViewModel : ObservableObject
         StopClock();
         _clockSeconds = PeriodLengthSeconds(Quarter);
         GameClock = FormatClock(_clockSeconds);
+        _ = SaveStateAsync();
+    }
+
+    // ── Resume / finish (US-10) ──
+    /// <summary>
+    /// Persists the live lifecycle state (status + exact clock + period) so the game can
+    /// be left and resumed exactly where it was. Called on pause, period change, and when
+    /// the scoring page disappears. Cheap, targeted write — never touches the event graph.
+    /// </summary>
+    public async Task SaveStateAsync()
+    {
+        if (!_loaded || GameId <= 0) return;
+        await _gameRepository.UpdateGameStateAsync(GameId, _status, _clockSeconds, Quarter);
+    }
+
+    [RelayCommand]
+    private async Task FinishGameAsync()
+    {
+        bool confirm = await Shell.Current.DisplayAlertAsync(
+            "Finish Game",
+            $"End this game and mark it complete?\n\n{HomeTeamAbbr} {HomeScore} — {AwayScore} {AwayTeamAbbr}",
+            "Finish", "Cancel");
+        if (!confirm) return;
+
+        StopClock();
+        _status = GameStatus.Finished;
+        await SaveStateAsync();
+        await Shell.Current.GoToAsync("..");
     }
 
     // ── Game clock ──
     [RelayCommand]
     private void ToggleClock()
     {
-        if (IsClockRunning) StopClock();
+        if (IsClockRunning)
+        {
+            // Capture the exact remaining time the moment the scorer pauses.
+            StopClock();
+            _ = SaveStateAsync();
+        }
         else StartClock();
     }
 

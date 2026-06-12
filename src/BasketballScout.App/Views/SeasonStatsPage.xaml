@@ -58,8 +58,16 @@
                                             <Label Text="{Binding ResultBadge}" FontSize="11"
                                                    FontAttributes="Bold" TextColor="{Binding ResultColor}" />
                                         </Border>
+                                        <Border Grid.Column="2" IsVisible="{Binding IsInProgress}"
+                                                StrokeShape="RoundRectangle 4" Stroke="#3a2a10"
+                                                BackgroundColor="#2a1f0a" Padding="7,3"
+                                                VerticalOptions="Center">
+                                            <Label Text="● RESUME" FontSize="10"
+                                                   FontAttributes="Bold" TextColor="#fbbf24" />
+                                        </Border>
                                         <Button Grid.Column="3"
                                                 Text="PDF"
+                                                IsVisible="{Binding ShowPdf}"
                                                 FontSize="10"
                                                 FontAttributes="Bold"
                                                 BackgroundColor="#e85d26"

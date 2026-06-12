@@ -52,6 +52,10 @@
                         FontSize="13" FontAttributes="Bold" Padding="14,4"
                         BackgroundColor="#1a2336" TextColor="#60a5fa" CornerRadius="4"
                         HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="56" />
+                <Button Text="✓ END" Command="{Binding FinishGameCommand}"
+                        FontSize="13" FontAttributes="Bold" Padding="14,4"
+                        BackgroundColor="#13301d" TextColor="#4ade80" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="56" />
             </HorizontalStackLayout>
 
             <!-- Away Score -->

@@ -31,6 +31,13 @@ public partial class GameScoringPage : ContentPage
         _vm.ActionRecorded += OnActionRecorded;
     }
 
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Persist the exact clock/period so the game can be resumed where it was left.
+        _ = _vm.SaveStateAsync();
+    }
+
     private void OnActionUndone(string message) => ShowToast(message);
 
     private void OnActionRecorded(string message) => ShowToast($"✓ {message}");
