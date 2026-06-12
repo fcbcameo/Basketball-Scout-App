@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -66,20 +67,35 @@ public partial class SeasonStatsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Matches overview (US-6): completed matches only, newest first. When a
-    /// specific team is selected in the filter, only that team's matches are
-    /// shown, each with a W/L/T badge from that team's perspective.
+    /// Matches overview (US-6 + US-10). In-progress games are listed first with a
+    /// Resume affordance, then completed matches (newest first) with a W/L/T badge
+    /// from the filtered team's perspective. The team filter scopes both groups.
     /// </summary>
     private void RebuildGamesList()
     {
         int filterTeamId = SelectedTeamFilter?.TeamId ?? 0;
 
-        var games = _allGames.Where(g => g.IsPlayed);
-        if (filterTeamId > 0)
-            games = games.Where(g => g.HomeTeamId == filterTeamId || g.AwayTeamId == filterTeamId);
+        bool InFilter(SeasonGameSummary g) =>
+            filterTeamId == 0 || g.HomeTeamId == filterTeamId || g.AwayTeamId == filterTeamId;
+
+        // In-progress (resumable): started but not finished. _allGames is already newest-first.
+        var inProgress = _allGames.Where(g => g.Status == GameStatus.InProgress && g.HasEvents && InFilter(g));
+        var finished = _allGames.Where(g => g.IsPlayed && InFilter(g));
 
         Games.Clear();
-        foreach (var g in games)
+
+        foreach (var g in inProgress)
+        {
+            Games.Add(new GameSummary
+            {
+                GameId = g.GameId,
+                DateDisplay = g.GameDate.ToString("MMM d, yyyy"),
+                ScoreDisplay = $"{g.HomeTeamAbbr} {g.HomeScore} — {g.AwayScore} {g.AwayTeamAbbr}",
+                IsInProgress = true
+            });
+        }
+
+        foreach (var g in finished)
         {
             string badge = string.Empty, badgeColor = "#888";
             if (filterTeamId > 0)
@@ -103,37 +119,57 @@ public partial class SeasonStatsViewModel : ObservableObject
         }
     }
 
+    private bool _isLoading;
+
+    /// <summary>Reloads when returning to the page (e.g. after finishing or resuming a game),
+    /// so the matches list reflects the latest status. No-op until first loaded.</summary>
+    public Task ReloadAsync() => SeasonId > 0 ? LoadAsync(SeasonId) : Task.CompletedTask;
+
     private async Task LoadAsync(int seasonId)
     {
-        // Per-game summaries (final scores + played state) for the matches overview.
-        // Must be set before SelectedTeamFilter, whose setter triggers ApplyFilter.
-        _allGames = await _statsService.GetSeasonGameSummariesAsync(seasonId);
-
-        var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
-
-        // Build team filter list
-        TeamFilters.Clear();
-        TeamFilters.Add(new TeamFilter { TeamId = 0, DisplayName = "All Teams" });
-        foreach (var team in teams)
+        if (_isLoading) return; // guard against the query-property + OnAppearing double-trigger
+        _isLoading = true;
+        try
         {
-            TeamFilters.Add(new TeamFilter
-            {
-                TeamId = team.Id,
-                TeamName = team.Name,
-                DisplayName = team.Name
-            });
-        }
-        SelectedTeamFilter = TeamFilters[0];
+            // Per-game summaries (final scores + status) for the matches overview.
+            // Must be set before SelectedTeamFilter, whose setter triggers ApplyFilter.
+            _allGames = await _statsService.GetSeasonGameSummariesAsync(seasonId);
 
-        // Load season stats
-        _allStats = await _statsService.GetSeasonStatsAsync(seasonId);
-        ApplyFilter();
+            var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
+
+            // Build team filter list, preserving the current selection across reloads.
+            int previousFilterId = SelectedTeamFilter?.TeamId ?? 0;
+            TeamFilters.Clear();
+            TeamFilters.Add(new TeamFilter { TeamId = 0, DisplayName = "All Teams" });
+            foreach (var team in teams)
+            {
+                TeamFilters.Add(new TeamFilter
+                {
+                    TeamId = team.Id,
+                    TeamName = team.Name,
+                    DisplayName = team.Name
+                });
+            }
+            SelectedTeamFilter = TeamFilters.FirstOrDefault(f => f.TeamId == previousFilterId) ?? TeamFilters[0];
+
+            // Load season stats
+            _allStats = await _statsService.GetSeasonStatsAsync(seasonId);
+            ApplyFilter();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     [RelayCommand]
     private async Task ViewGameAsync(GameSummary game)
     {
-        await Shell.Current.GoToAsync($"{nameof(Views.GameBoxScorePage)}?gameId={game.GameId}");
+        // Resume an in-progress game in the scoring screen; otherwise open the box score.
+        if (game.IsInProgress)
+            await Shell.Current.GoToAsync($"{nameof(Views.GameScoringPage)}?gameId={game.GameId}&resume=1");
+        else
+            await Shell.Current.GoToAsync($"{nameof(Views.GameBoxScorePage)}?gameId={game.GameId}");
     }
 
     [RelayCommand]
@@ -221,4 +257,9 @@ public class GameSummary
     public string ResultBadge { get; set; } = string.Empty;
     public string ResultColor { get; set; } = "#888";
     public bool HasBadge { get; set; }
+
+    /// <summary>True for a started-but-unfinished game: tapping it resumes scoring (US-10).</summary>
+    public bool IsInProgress { get; set; }
+    /// <summary>Completed games offer a PDF export; in-progress ones don't.</summary>
+    public bool ShowPdf => !IsInProgress;
 }

@@ -58,8 +58,9 @@ public class GameStatsService
 
     /// <summary>
     /// Per-game summaries for a season's matches overview: final score computed
-    /// from stat events, plus whether the game was actually played (has any
-    /// non-substitution events). Newest first.
+    /// from stat events, plus lifecycle status. Completed (Finished) matches and
+    /// resumable in-progress games are both returned; the caller decides how to
+    /// present each. Newest first.
     /// </summary>
     public async Task<List<SeasonGameSummary>> GetSeasonGameSummariesAsync(int seasonId)
     {
@@ -74,8 +75,8 @@ public class GameStatsService
         foreach (var game in games.OrderByDescending(g => g.GameDate).ThenByDescending(g => g.Id))
         {
             var events = await _statEventRepository.GetByGameIdAsync(game.Id);
-            bool isPlayed = events.Any(e =>
-                e.StatType != StatType.SubIn && e.StatType != StatType.SubOut);
+            bool hasEvents = events.Count > 0;
+            bool isPlayed = game.Status == GameStatus.Finished;
 
             int home = 0, away = 0;
             foreach (var e in events)
@@ -108,7 +109,9 @@ public class GameStatsService
                 AwayTeamAbbr = awayTeam?.Abbreviation ?? "AWY",
                 HomeScore = home,
                 AwayScore = away,
-                IsPlayed = isPlayed
+                IsPlayed = isPlayed,
+                Status = game.Status,
+                HasEvents = hasEvents
             });
         }
         return result;
@@ -491,7 +494,11 @@ public class SeasonGameSummary
     public string AwayTeamAbbr { get; set; } = string.Empty;
     public int HomeScore { get; set; }
     public int AwayScore { get; set; }
+    /// <summary>True when the game is Finished (appears in the completed-matches list).</summary>
     public bool IsPlayed { get; set; }
+    public GameStatus Status { get; set; }
+    /// <summary>Any stat events recorded (incl. starting lineup) — i.e. the game was entered.</summary>
+    public bool HasEvents { get; set; }
 }
 
 public class GameBoxScore

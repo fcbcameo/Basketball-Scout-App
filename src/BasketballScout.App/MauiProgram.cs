@@ -80,6 +80,7 @@ public static class MauiProgram
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ScoutDbContext>();
             db.Database.EnsureCreated();
+            EnsureGameColumns(db);
         }
         catch (Exception ex)
         {
@@ -87,5 +88,40 @@ public static class MauiProgram
         }
 
         return app;
+    }
+
+    /// <summary>
+    /// EnsureCreated() builds the schema only when the database file doesn't exist yet;
+    /// it never alters an existing database, and this project has no EF migrations. So for
+    /// older installs we additively patch the Games table with the lifecycle columns added
+    /// in US-10. Each ALTER is guarded by a PRAGMA check, so this is idempotent and safe.
+    /// Legacy games predate the feature, so Status backfills to 1 (Finished).
+    /// </summary>
+    private static void EnsureGameColumns(ScoutDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+            connection.Open();
+
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var pragma = connection.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA table_info(Games);";
+            using var reader = pragma.ExecuteReader();
+            while (reader.Read())
+                existing.Add(reader.GetString(1)); // column 1 = name
+        }
+
+        void AddColumn(string name, string definition)
+        {
+            if (existing.Contains(name)) return;
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"ALTER TABLE Games ADD COLUMN {definition};";
+            cmd.ExecuteNonQuery();
+        }
+
+        AddColumn("Status", "Status INTEGER NOT NULL DEFAULT 1");                       // legacy games → Finished
+        AddColumn("ClockSecondsRemaining", "ClockSecondsRemaining INTEGER NOT NULL DEFAULT 600");
+        AddColumn("CurrentPeriod", "CurrentPeriod INTEGER NOT NULL DEFAULT 1");
     }
 }

@@ -1,3 +1,4 @@
+using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -50,5 +51,18 @@ public class GameRepository : IGameRepository
             _db.Games.Remove(game);
             await _db.SaveChangesAsync();
         }
+    }
+
+    public async Task UpdateGameStateAsync(int id, GameStatus status, int clockSecondsRemaining, int currentPeriod)
+    {
+        // Load the bare row (no Includes) so only the three scalar fields are marked
+        // modified — avoids re-saving the whole StatEvent/QuarterScore graph.
+        var game = await _db.Games.FirstOrDefaultAsync(g => g.Id == id);
+        if (game is null) return;
+
+        game.Status = status;
+        game.ClockSecondsRemaining = clockSecondsRemaining;
+        game.CurrentPeriod = currentPeriod;
+        await _db.SaveChangesAsync();
     }
 }

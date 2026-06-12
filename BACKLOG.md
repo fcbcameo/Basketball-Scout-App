@@ -7,6 +7,10 @@ Scope decisions confirmed with the product owner:
 - **Matches overview** → cleaner list within the existing **Season** (no new "Competition" entity).
 - **In-match corrections** → quick corrections only (delete recent events + adjust per-player counters), not a full play-by-play editor.
 - **Overtime** → standard 5:00 periods, unlimited (OT1, OT2, …).
+- **Game lifecycle** → add an explicit `GameStatus` (InProgress / Finished) field; "played" is no longer inferred from event count. A game is finished only when explicitly ended.
+- **Resume fidelity** → restore the **exact** clock (seconds remaining) and period (Q/OT) where you left off; persist live clock state on the game.
+- **Editing finished games** → a **simple stat editor** that can adjust any recorded stat (points, FTs, fouls, assists, rebounds, steals, blocks, turnovers) — **shot location is the one thing that stays locked** (not editable).
+- **Deletion** → cascade delete; **seasons require type-to-confirm** (most destructive), **games are single-confirm**.
 
 Sizes are T-shirt (S/M/L). Suggested implementation order is at the bottom.
 
@@ -152,21 +156,81 @@ Builds on US-2's live marker. In `GameScoringPage.xaml.cs`, `OnCourtTapped` curr
 
 ---
 
+## US-10 — Exit and resume an in-progress game ⏸️
+**Priority:** High · **Size:** L · **Type:** Feature
+
+**As a** scorer, **I want** to leave an ongoing game and come back to it exactly where I left off, **so that** I can handle interruptions (or close the app) without losing my place or my clock.
+
+**Acceptance criteria**
+- I can leave a live game (back-navigate / close) at any time without being forced to finish it; nothing is lost.
+- The game appears as **In Progress** in the season's match list, visually distinct from finished games, and is offered as **Resume** rather than a fresh setup.
+- Resuming restores: the **exact game clock** (seconds remaining), the **current period** (Q1–Q4 or OT1+), the **score**, **per-player fouls**, the **on-court five** for both teams, and all shot dots.
+- A clock that was running when I left resumes **paused** (I tap to restart it) — it never keeps ticking while I'm away.
+- An explicit **Finish Game** action marks the game **Finished**; finished games no longer appear as resumable and move to the completed-matches overview (US-6).
+- Starting a brand-new game for a matchup that already has an in-progress game does not silently overwrite it.
+
+**Technical notes**
+Add a `GameStatus` enum (`InProgress`, `Finished`) to `Game` + EF migration; default new games to `InProgress`. The on-court five is already reconstructable from `SubIn`/`SubOut` events, but the live clock + current period are **in-memory only** in `GameScoringViewModel` (`_clockSeconds`, `GameClock`, `Quarter`, `IsClockRunning`) — persist these on `Game` (e.g. `ClockSecondsRemaining`, `CurrentPeriod`) and save on exit / periodically. On load, hydrate the VM from the persisted clock/period instead of resetting to `10:00 / Q1`. Wire a **Finish Game** command that sets `Status = Finished`. Update US-6's matches list to key off `Status` (not "has events") and surface In-Progress rows with a Resume affordance. The "played" inference in `GetSeasonGameSummariesAsync` should switch to `Status == Finished`.
+
+---
+
+## US-11 — Edit recorded stats of a finished game ✏️
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** scorer, **I want** to edit the stats of a finished game, **so that** I can fix mistakes I notice after the final buzzer.
+
+**Acceptance criteria**
+- From a finished match (matches overview / box score), I can open a **stat editor** for that game.
+- I can **add, remove, and adjust any recorded stat**: 2PT/3PT makes & misses, free throws, assists, steals, blocks, turnovers, offensive/defensive rebounds, and personal/technical fouls — attributed to the correct player.
+- The **only thing I cannot edit is a shot's location** on the court; existing shot dots keep their saved X/Y. (A shot's made/miss result and which player took it may still be corrected.)
+- Edits immediately and correctly update the **box score, final score, season averages, and the game PDF**.
+- I can cancel out of the editor without applying changes, and confirm to save.
+- Editing does **not** reopen the game as in-progress — the game stays **Finished**.
+
+**Technical notes**
+A dedicated, simple editor (not the live court UI) operating on the game's `StatEvent`s via the repository — reuse the reversal/adjust logic from US-5's corrections drawer (`ApplyReversal`, per-player counter add/remove) but scoped to the full event list of a finished game rather than just recent events. Present stats grouped by player (box-score-like rows) with +/- and delete controls, plus an "add stat" path. Keep shot `CourtX/CourtY` read-only — allow toggling `ShotResult` and re-attribution, but never expose location editing. After save, recomputation flows through existing aggregation (`GameStatsService`) so box score / season stats / PDF stay consistent. Builds on US-4/US-5 event manipulation.
+
+---
+
+## US-12 — Delete games and seasons (with confirmation) 🗑️
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** user, **I want** to delete games and whole seasons, **so that** I can remove test data and mistakes — but never by accident.
+
+**Acceptance criteria**
+- I can delete a single **game** from the matches overview; it requires a **confirmation dialog** naming the match before anything is removed.
+- I can delete a **season**; because it's the most destructive action, it requires **type-to-confirm** (typing the season's name, or an equivalent stronger second step) — a single tap is not enough.
+- Deleting a season **cascades**: its games, all their `StatEvent`s/`QuarterScore`s, and the season's teams & players are removed.
+- Deleting a game removes that game and all its `StatEvent`s/`QuarterScore`s only (season, teams, players untouched).
+- After deletion the relevant lists refresh and the item is gone; nothing is left orphaned in the database.
+- Cancelling either confirmation leaves all data unchanged.
+
+**Technical notes**
+Add delete commands on the appropriate ViewModels (matches overview / season list) and repository methods. Use cascade deletes via EF Core relationship configuration (or explicit child removal in the repos) for `Game → StatEvent/QuarterScore` and `Season → Game/Team/Player`. Verify the EF model's delete behavior (`OnDelete(DeleteBehavior.Cascade)`) so SQLite removes children; add a migration if FK behavior changes. Game delete = a standard `DisplayAlert` confirm; season delete = a prompt requiring the typed season name (e.g. `DisplayPromptAsync`) before enabling the destructive action. Guard against deleting an **in-progress** game without an extra nudge (optional).
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
 - ✅ **US-2** — Live shot-placement marker (PR #22, merged).
 - ✅ **US-3** — Larger in-game buttons (PR #22, merged).
 - ✅ **US-4** — Prominent general undo with feedback (PR #22, merged).
-- ⬜ **US-5, US-6, US-7, US-8, US-9** — open.
+- ✅ **US-5** — In-match quick corrections (PR #25, merged).
+- ✅ **US-6** — Completed-matches overview per season (PR #27, merged).
+- ✅ **US-7** — Overtime support (PR #26, merged).
+- ✅ **US-8** — Quick-action confirmation feedback (merged).
+- ✅ **US-9** — Reposition a pending shot (merged).
+- 🔄 **US-10** — Exit & resume an in-progress game (implemented; PR open).
+- ⬜ **US-11, US-12** — open (game lifecycle batch, captured 2026-06-12).
 
 ## Suggested implementation order (remaining)
 
-1. **US-8 + US-9** — small scoring-screen follow-ups; both reuse the toast (US-4) and live marker (US-2) just shipped. Quick to batch together.
-2. **US-5** — in-match quick corrections (builds on US-4's event-removal logic).
-3. **US-7** — overtime (touches box score + the PDF).
-4. **US-6** — matches overview.
+1. **US-10** — exit & resume in-progress game. Foundational: introduces the `GameStatus` field that US-11 and US-12 both lean on, and the persisted clock/period state.
+2. **US-11** — edit finished-game stats. Builds on US-5's reversal/adjust logic and on US-10's clean Finished status.
+3. **US-12** — delete games & seasons. Cleanest last: cascade rules are simpler to reason about once lifecycle status exists.
 
 **Dependencies / sequencing rationale**
-- US-8 reuses the `Toast` + `DescribeEvent` from US-4; US-9 extends US-2's marker — both are cheap now that their foundations exist.
-- US-4 before US-5: both manipulate `StatEvent`s; undo gives corrections a foundation.
+- US-10 first: the `GameStatus` enum + migration unblocks US-11 ("finished" games to edit) and US-12 (a clear In-Progress vs Finished distinction for delete guards), and it replaces the brittle "has events = played" inference behind US-6.
+- US-11 reuses US-5's `ApplyReversal` + per-player counter logic; shot **location** stays locked while result/attribution remain editable.
+- US-12 last: cascade-delete behavior (`Season → Game → StatEvent/QuarterScore`) is easiest to verify once the model is otherwise stable.
