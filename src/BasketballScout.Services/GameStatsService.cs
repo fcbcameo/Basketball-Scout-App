@@ -56,6 +56,64 @@ public class GameStatsService
         };
     }
 
+    /// <summary>
+    /// Per-game summaries for a season's matches overview: final score computed
+    /// from stat events, plus whether the game was actually played (has any
+    /// non-substitution events). Newest first.
+    /// </summary>
+    public async Task<List<SeasonGameSummary>> GetSeasonGameSummariesAsync(int seasonId)
+    {
+        var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
+        var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
+        var teamLookup = teams.ToDictionary(t => t.Id);
+        var playerTeam = teams
+            .SelectMany(t => t.Players.Select(p => (PlayerId: p.Id, TeamId: t.Id)))
+            .ToDictionary(x => x.PlayerId, x => x.TeamId);
+
+        var result = new List<SeasonGameSummary>();
+        foreach (var game in games.OrderByDescending(g => g.GameDate).ThenByDescending(g => g.Id))
+        {
+            var events = await _statEventRepository.GetByGameIdAsync(game.Id);
+            bool isPlayed = events.Any(e =>
+                e.StatType != StatType.SubIn && e.StatType != StatType.SubOut);
+
+            int home = 0, away = 0;
+            foreach (var e in events)
+            {
+                if (e.ShotResult != ShotResult.Made) continue;
+                int pts = e.StatType switch
+                {
+                    StatType.Points2 => 2,
+                    StatType.Points3 => 3,
+                    StatType.FreeThrow => 1,
+                    _ => 0
+                };
+                if (pts == 0 || !playerTeam.TryGetValue(e.PlayerId, out var tid)) continue;
+                if (tid == game.HomeTeamId) home += pts;
+                else if (tid == game.AwayTeamId) away += pts;
+            }
+
+            var homeTeam = teamLookup.GetValueOrDefault(game.HomeTeamId);
+            var awayTeam = teamLookup.GetValueOrDefault(game.AwayTeamId);
+
+            result.Add(new SeasonGameSummary
+            {
+                GameId = game.Id,
+                GameDate = game.GameDate,
+                HomeTeamId = game.HomeTeamId,
+                AwayTeamId = game.AwayTeamId,
+                HomeTeamName = homeTeam?.Name ?? "Home",
+                AwayTeamName = awayTeam?.Name ?? "Away",
+                HomeTeamAbbr = homeTeam?.Abbreviation ?? "HOM",
+                AwayTeamAbbr = awayTeam?.Abbreviation ?? "AWY",
+                HomeScore = home,
+                AwayScore = away,
+                IsPlayed = isPlayed
+            });
+        }
+        return result;
+    }
+
     public async Task<List<PlayerSeasonStats>> GetSeasonStatsAsync(int seasonId)
     {
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
@@ -419,6 +477,21 @@ public class GameStatsService
         public Dictionary<int, int> PlayerSecondsOnCourt { get; } = new();
         public Dictionary<int, int> PlayerPlusMinus { get; } = new();
     }
+}
+
+public class SeasonGameSummary
+{
+    public int GameId { get; set; }
+    public DateTime GameDate { get; set; }
+    public int HomeTeamId { get; set; }
+    public int AwayTeamId { get; set; }
+    public string HomeTeamName { get; set; } = string.Empty;
+    public string AwayTeamName { get; set; } = string.Empty;
+    public string HomeTeamAbbr { get; set; } = string.Empty;
+    public string AwayTeamAbbr { get; set; } = string.Empty;
+    public int HomeScore { get; set; }
+    public int AwayScore { get; set; }
+    public bool IsPlayed { get; set; }
 }
 
 public class GameBoxScore

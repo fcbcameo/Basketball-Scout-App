@@ -24,19 +24,23 @@
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="GAMES" FontSize="10" FontAttributes="Bold"
+                    <Label Text="MATCHES" FontSize="10" FontAttributes="Bold"
                            TextColor="#555" CharacterSpacing="2" />
 
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="4">
                         <BindableLayout.EmptyView>
-                            <Label Text="No games played yet" FontSize="11" TextColor="#444"
-                                   HorizontalOptions="Center" Margin="0,8" />
+                            <VerticalStackLayout Spacing="2" Margin="0,10">
+                                <Label Text="No matches played yet" FontSize="12" TextColor="#555"
+                                       HorizontalOptions="Center" />
+                                <Label Text="Completed matches will appear here" FontSize="10" TextColor="#3a3a3a"
+                                       HorizontalOptions="Center" />
+                            </VerticalStackLayout>
                         </BindableLayout.EmptyView>
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:GameSummary">
                                 <Border Padding="10,8" StrokeShape="RoundRectangle 6"
                                         Stroke="#1a1a1a" BackgroundColor="#141414">
-                                    <Grid ColumnDefinitions="50,*,Auto,Auto" ColumnSpacing="8">
+                                    <Grid ColumnDefinitions="78,*,Auto,Auto,Auto" ColumnSpacing="8">
                                         <Grid.GestureRecognizers>
                                             <TapGestureRecognizer
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewGameCommand}"
@@ -44,10 +48,17 @@
                                         </Grid.GestureRecognizers>
                                         <Label Text="{Binding DateDisplay}" FontSize="10" TextColor="#666"
                                                VerticalOptions="Center" />
-                                        <Label Grid.Column="1" Text="{Binding ScoreDisplay}" FontSize="12"
-                                               FontAttributes="Bold" TextColor="#ccc"
+                                        <Label Grid.Column="1" Text="{Binding ScoreDisplay}" FontSize="13"
+                                               FontAttributes="Bold" TextColor="#ddd"
                                                HorizontalOptions="Center" VerticalOptions="Center" />
-                                        <Button Grid.Column="2"
+                                        <Border Grid.Column="2" IsVisible="{Binding HasBadge}"
+                                                StrokeShape="RoundRectangle 4" Stroke="Transparent"
+                                                BackgroundColor="#1e1e1e" Padding="7,3"
+                                                VerticalOptions="Center">
+                                            <Label Text="{Binding ResultBadge}" FontSize="11"
+                                                   FontAttributes="Bold" TextColor="{Binding ResultColor}" />
+                                        </Border>
+                                        <Button Grid.Column="3"
                                                 Text="PDF"
                                                 FontSize="10"
                                                 FontAttributes="Bold"
@@ -59,7 +70,7 @@
                                                 MinimumWidthRequest="48"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ShareGamePdfCommand}"
                                                 CommandParameter="{Binding .}" />
-                                        <Label Grid.Column="3" Text=">" FontSize="14" TextColor="#444"
+                                        <Label Grid.Column="4" Text=">" FontSize="14" TextColor="#444"
                                                VerticalOptions="Center" />
                                     </Grid>
                                 </Border>

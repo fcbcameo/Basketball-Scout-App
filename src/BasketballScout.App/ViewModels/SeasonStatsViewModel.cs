@@ -10,7 +10,6 @@ namespace BasketballScout.App.ViewModels;
 public partial class SeasonStatsViewModel : ObservableObject
 {
     private readonly GameStatsService _statsService;
-    private readonly IGameRepository _gameRepository;
     private readonly ITeamRepository _teamRepository;
 
     [ObservableProperty]
@@ -30,17 +29,16 @@ public partial class SeasonStatsViewModel : ObservableObject
     public ObservableCollection<PlayerSeasonStats> PlayerStats { get; } = [];
 
     private List<PlayerSeasonStats> _allStats = [];
+    private List<SeasonGameSummary> _allGames = [];
 
     private readonly PdfReportService _pdfService;
 
     public SeasonStatsViewModel(
         GameStatsService statsService,
-        IGameRepository gameRepository,
         ITeamRepository teamRepository,
         PdfReportService pdfService)
     {
         _statsService = statsService;
-        _gameRepository = gameRepository;
         _teamRepository = teamRepository;
         _pdfService = pdfService;
     }
@@ -63,14 +61,55 @@ public partial class SeasonStatsViewModel : ObservableObject
 
         PlayerStats.Clear();
         foreach (var s in filtered) PlayerStats.Add(s);
+
+        RebuildGamesList();
+    }
+
+    /// <summary>
+    /// Matches overview (US-6): completed matches only, newest first. When a
+    /// specific team is selected in the filter, only that team's matches are
+    /// shown, each with a W/L/T badge from that team's perspective.
+    /// </summary>
+    private void RebuildGamesList()
+    {
+        int filterTeamId = SelectedTeamFilter?.TeamId ?? 0;
+
+        var games = _allGames.Where(g => g.IsPlayed);
+        if (filterTeamId > 0)
+            games = games.Where(g => g.HomeTeamId == filterTeamId || g.AwayTeamId == filterTeamId);
+
+        Games.Clear();
+        foreach (var g in games)
+        {
+            string badge = string.Empty, badgeColor = "#888";
+            if (filterTeamId > 0)
+            {
+                int us = g.HomeTeamId == filterTeamId ? g.HomeScore : g.AwayScore;
+                int them = g.HomeTeamId == filterTeamId ? g.AwayScore : g.HomeScore;
+                (badge, badgeColor) = us > them ? ("W", "#4ade80")
+                    : us < them ? ("L", "#f87171")
+                    : ("T", "#aaaaaa");
+            }
+
+            Games.Add(new GameSummary
+            {
+                GameId = g.GameId,
+                DateDisplay = g.GameDate.ToString("MMM d, yyyy"),
+                ScoreDisplay = $"{g.HomeTeamAbbr} {g.HomeScore} — {g.AwayScore} {g.AwayTeamAbbr}",
+                ResultBadge = badge,
+                ResultColor = badgeColor,
+                HasBadge = badge.Length > 0
+            });
+        }
     }
 
     private async Task LoadAsync(int seasonId)
     {
-        // Load games list
-        var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
+        // Per-game summaries (final scores + played state) for the matches overview.
+        // Must be set before SelectedTeamFilter, whose setter triggers ApplyFilter.
+        _allGames = await _statsService.GetSeasonGameSummariesAsync(seasonId);
+
         var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
-        var teamLookup = teams.ToDictionary(t => t.Id);
 
         // Build team filter list
         TeamFilters.Clear();
@@ -85,19 +124,6 @@ public partial class SeasonStatsViewModel : ObservableObject
             });
         }
         SelectedTeamFilter = TeamFilters[0];
-
-        Games.Clear();
-        foreach (var game in games.OrderByDescending(g => g.GameDate))
-        {
-            var home = teamLookup.GetValueOrDefault(game.HomeTeamId);
-            var away = teamLookup.GetValueOrDefault(game.AwayTeamId);
-            Games.Add(new GameSummary
-            {
-                GameId = game.Id,
-                DateDisplay = game.GameDate.ToString("MMM d"),
-                ScoreDisplay = $"{home?.Abbreviation ?? "?"} vs {away?.Abbreviation ?? "?"}"
-            });
-        }
 
         // Load season stats
         _allStats = await _statsService.GetSeasonStatsAsync(seasonId);
@@ -191,4 +217,8 @@ public class GameSummary
     public int GameId { get; set; }
     public string DateDisplay { get; set; } = string.Empty;
     public string ScoreDisplay { get; set; } = string.Empty;
+    /// <summary>"W"/"L"/"T" from the filtered team's perspective; empty when no team filter.</summary>
+    public string ResultBadge { get; set; } = string.Empty;
+    public string ResultColor { get; set; } = "#888";
+    public bool HasBadge { get; set; }
 }
