@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
+             x:Class="BasketballScout.App.Views.GameEditPage"
+             x:DataType="vm:GameEditViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#0a0a0a">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- ── Header: title, live score, pending changes ── -->
+        <Border Padding="16,12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 0"
+                Stroke="Transparent">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="EDIT STATS" FontSize="10" FontAttributes="Bold"
+                       TextColor="#555" CharacterSpacing="2" />
+                <Label Text="{Binding ScoreDisplay}" FontSize="20" FontAttributes="Bold"
+                       TextColor="White" />
+                <Label Text="{Binding PendingSummary}" FontSize="11" TextColor="#fbbf24" />
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- ── Body ── -->
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="12" Spacing="10">
+
+                <!-- Home team player chips -->
+                <Label Text="{Binding HomeTeamName}" FontSize="10" FontAttributes="Bold"
+                       TextColor="#888" CharacterSpacing="1.5" TextTransform="Uppercase" />
+                <FlexLayout BindableLayout.ItemsSource="{Binding HomeChips}"
+                            Wrap="Wrap" Direction="Row" JustifyContent="Start">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PlayerChip">
+                            <Border Padding="10,7" Margin="0,0,6,6"
+                                    StrokeShape="RoundRectangle 6"
+                                    Stroke="#1a1a1a"
+                                    BackgroundColor="{Binding ChipBackground}">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameEditViewModel}}, Path=SelectPlayerCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                                <Label Text="{Binding Label}" FontSize="12" FontAttributes="Bold"
+                                       TextColor="{Binding ChipTextColor}" />
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <!-- Away team player chips -->
+                <Label Text="{Binding AwayTeamName}" FontSize="10" FontAttributes="Bold"
+                       TextColor="#888" CharacterSpacing="1.5" TextTransform="Uppercase" />
+                <FlexLayout BindableLayout.ItemsSource="{Binding AwayChips}"
+                            Wrap="Wrap" Direction="Row" JustifyContent="Start">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PlayerChip">
+                            <Border Padding="10,7" Margin="0,0,6,6"
+                                    StrokeShape="RoundRectangle 6"
+                                    Stroke="#1a1a1a"
+                                    BackgroundColor="{Binding ChipBackground}">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameEditViewModel}}, Path=SelectPlayerCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                                <Label Text="{Binding Label}" FontSize="12" FontAttributes="Bold"
+                                       TextColor="{Binding ChipTextColor}" />
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <BoxView HeightRequest="1" Color="#1a1a1a" Margin="0,4" />
+
+                <!-- Stat counters for the selected player -->
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding StatRows}" Spacing="4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:StatCounterRow">
+                            <Border Padding="12,4" StrokeShape="RoundRectangle 8"
+                                    Stroke="#1a1a1a" BackgroundColor="#141414">
+                                <Grid ColumnDefinitions="*,44,48,44" ColumnSpacing="6">
+                                    <Label Text="{Binding Label}" FontSize="13" TextColor="#ccc"
+                                           VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="−"
+                                            FontSize="18" FontAttributes="Bold"
+                                            BackgroundColor="#3a1a1a" TextColor="#f87171"
+                                            CornerRadius="6" HeightRequest="40" WidthRequest="44"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameEditViewModel}}, Path=DecrementCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Label Grid.Column="2" Text="{Binding Count}" FontSize="17"
+                                           FontAttributes="Bold" TextColor="White"
+                                           HorizontalTextAlignment="Center" VerticalOptions="Center" />
+                                    <Button Grid.Column="3" Text="+"
+                                            FontSize="18" FontAttributes="Bold"
+                                            BackgroundColor="#13301d" TextColor="#4ade80"
+                                            CornerRadius="6" HeightRequest="40" WidthRequest="44"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameEditViewModel}}, Path=IncrementCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Label Text="Shot locations can't be edited: removing a shot also removes its dot from the shot chart, and shots added here appear in totals but not on the chart."
+                       FontSize="10" TextColor="#555" Margin="0,4,0,8" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ── Footer: Cancel / Save ── -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="10"
+              Padding="12,10" BackgroundColor="#0e0e0e">
+            <Button Text="Cancel" Command="{Binding CancelCommand}"
+                    FontSize="14" FontAttributes="Bold"
+                    BackgroundColor="#1a1a1a" TextColor="#999"
+                    CornerRadius="8" HeightRequest="46" />
+            <Button Grid.Column="1" Text="Save Changes" Command="{Binding SaveCommand}"
+                    FontSize="14" FontAttributes="Bold"
+                    BackgroundColor="#e85d26" TextColor="White"
+                    CornerRadius="8" HeightRequest="46" />
+        </Grid>
+
+    </Grid>
+</ContentPage>

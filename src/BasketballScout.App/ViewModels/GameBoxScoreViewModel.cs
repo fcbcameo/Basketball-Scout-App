@@ -36,6 +36,15 @@ public partial class GameBoxScoreViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task EditStatsAsync()
+    {
+        await Shell.Current.GoToAsync($"{nameof(Views.GameEditPage)}?gameId={GameId}");
+    }
+
+    /// <summary>Re-reads the box score — called when returning from the stat editor (US-11).</summary>
+    public Task ReloadAsync() => GameId > 0 ? LoadAsync(GameId) : Task.CompletedTask;
+
+    [RelayCommand]
     private async Task SharePdfAsync()
     {
         try
