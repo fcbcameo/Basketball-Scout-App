@@ -11,14 +11,24 @@
     <ScrollView>
         <VerticalStackLayout Padding="12" Spacing="12">
 
-            <!-- Share PDF Button -->
-            <Button Text="Share Game Report PDF"
-                    Command="{Binding SharePdfCommand}"
-                    BackgroundColor="#e85d26"
-                    TextColor="White"
-                    FontAttributes="Bold"
-                    CornerRadius="8"
-                    HeightRequest="42" />
+            <!-- Action buttons -->
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Button Text="Share Game Report PDF"
+                        Command="{Binding SharePdfCommand}"
+                        BackgroundColor="#e85d26"
+                        TextColor="White"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42" />
+                <Button Grid.Column="1" Text="✎ Edit Stats"
+                        Command="{Binding EditStatsCommand}"
+                        BackgroundColor="#1a2336"
+                        TextColor="#60a5fa"
+                        FontAttributes="Bold"
+                        CornerRadius="8"
+                        HeightRequest="42"
+                        Padding="14,0" />
+            </Grid>
 
             <!-- Scoreboard Header -->
             <Border Padding="16" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
