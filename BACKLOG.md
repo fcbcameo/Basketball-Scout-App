@@ -222,8 +222,8 @@ Add delete commands on the appropriate ViewModels (matches overview / season lis
 - ✅ **US-8** — Quick-action confirmation feedback (merged).
 - ✅ **US-9** — Reposition a pending shot (merged).
 - ✅ **US-10** — Exit & resume an in-progress game (PR #28, merged).
-- 🔄 **US-11** — Edit recorded stats of a finished game (implemented; PR open).
-- ⬜ **US-12** — open (delete games & seasons).
+- ✅ **US-11** — Edit recorded stats of a finished game (PR #29, merged).
+- 🔄 **US-12** — Delete games & seasons with confirmation (implemented; PR open).
 
 ## Suggested implementation order (remaining)
 

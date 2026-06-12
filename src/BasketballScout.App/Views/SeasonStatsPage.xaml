@@ -40,7 +40,7 @@
                             <DataTemplate x:DataType="vm:GameSummary">
                                 <Border Padding="10,8" StrokeShape="RoundRectangle 6"
                                         Stroke="#1a1a1a" BackgroundColor="#141414">
-                                    <Grid ColumnDefinitions="78,*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <Grid ColumnDefinitions="78,*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
                                         <Grid.GestureRecognizers>
                                             <TapGestureRecognizer
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ViewGameCommand}"
@@ -78,7 +78,19 @@
                                                 MinimumWidthRequest="48"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=ShareGamePdfCommand}"
                                                 CommandParameter="{Binding .}" />
-                                        <Label Grid.Column="4" Text=">" FontSize="14" TextColor="#444"
+                                        <Button Grid.Column="4"
+                                                Text="✕"
+                                                FontSize="12"
+                                                FontAttributes="Bold"
+                                                BackgroundColor="#3a1a1a"
+                                                TextColor="#f87171"
+                                                CornerRadius="4"
+                                                Padding="0"
+                                                HeightRequest="28"
+                                                MinimumWidthRequest="32"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:SeasonStatsViewModel}}, Path=DeleteGameCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Label Grid.Column="5" Text=">" FontSize="14" TextColor="#444"
                                                VerticalOptions="Center" />
                                     </Grid>
                                 </Border>

@@ -12,6 +12,7 @@ public partial class SeasonStatsViewModel : ObservableObject
 {
     private readonly GameStatsService _statsService;
     private readonly ITeamRepository _teamRepository;
+    private readonly IGameRepository _gameRepository;
 
     [ObservableProperty]
     public partial int SeasonId { get; set; }
@@ -37,10 +38,12 @@ public partial class SeasonStatsViewModel : ObservableObject
     public SeasonStatsViewModel(
         GameStatsService statsService,
         ITeamRepository teamRepository,
+        IGameRepository gameRepository,
         PdfReportService pdfService)
     {
         _statsService = statsService;
         _teamRepository = teamRepository;
+        _gameRepository = gameRepository;
         _pdfService = pdfService;
     }
 
@@ -170,6 +173,23 @@ public partial class SeasonStatsViewModel : ObservableObject
             await Shell.Current.GoToAsync($"{nameof(Views.GameScoringPage)}?gameId={game.GameId}&resume=1");
         else
             await Shell.Current.GoToAsync($"{nameof(Views.GameBoxScorePage)}?gameId={game.GameId}");
+    }
+
+    /// <summary>US-12: delete a single match after a confirmation naming it. The delete
+    /// removes the game with its stat events and quarter scores; season, teams and
+    /// players are untouched. In-progress games get an extra warning line.</summary>
+    [RelayCommand]
+    private async Task DeleteGameAsync(GameSummary game)
+    {
+        string progressNote = game.IsInProgress ? "This match is still IN PROGRESS.\n\n" : string.Empty;
+        bool confirm = await Shell.Current.DisplayAlertAsync(
+            "Delete Match",
+            $"{progressNote}Permanently delete {game.ScoreDisplay} ({game.DateDisplay}) and all its stats?",
+            "Delete", "Cancel");
+        if (!confirm) return;
+
+        await _gameRepository.DeleteAsync(game.GameId);
+        await ReloadAsync();
     }
 
     [RelayCommand]
