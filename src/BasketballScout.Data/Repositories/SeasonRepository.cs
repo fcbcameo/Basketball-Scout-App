@@ -37,13 +37,26 @@ public class SeasonRepository : ISeasonRepository
         await _db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Deep cascade delete (US-12). Children are removed explicitly in dependency
+    /// order inside a transaction, because relying on SQLite's own cascades can trip
+    /// the Restrict FKs (Game→Team, StatEvent→Player) depending on cascade order.
+    /// </summary>
     public async Task DeleteAsync(int id)
     {
-        var season = await _db.Seasons.FindAsync(id);
-        if (season is not null)
-        {
-            _db.Seasons.Remove(season);
-            await _db.SaveChangesAsync();
-        }
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        var gameIds = _db.Games.Where(g => g.SeasonId == id).Select(g => g.Id);
+        await _db.StatEvents.Where(e => gameIds.Contains(e.GameId)).ExecuteDeleteAsync();
+        await _db.QuarterScores.Where(q => gameIds.Contains(q.GameId)).ExecuteDeleteAsync();
+        await _db.Games.Where(g => g.SeasonId == id).ExecuteDeleteAsync();
+
+        var teamIds = _db.Teams.Where(t => t.SeasonId == id).Select(t => t.Id);
+        await _db.Players.Where(p => teamIds.Contains(p.TeamId)).ExecuteDeleteAsync();
+        await _db.Teams.Where(t => t.SeasonId == id).ExecuteDeleteAsync();
+
+        await _db.Seasons.Where(s => s.Id == id).ExecuteDeleteAsync();
+
+        await tx.CommitAsync();
     }
 }

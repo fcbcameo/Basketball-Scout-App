@@ -43,14 +43,17 @@ public class GameRepository : IGameRepository
         await _db.SaveChangesAsync();
     }
 
+    /// <summary>Deletes a game and its stat events / quarter scores (US-12). Explicit
+    /// child cleanup in a transaction rather than relying on DB-level cascades.</summary>
     public async Task DeleteAsync(int id)
     {
-        var game = await _db.Games.FindAsync(id);
-        if (game is not null)
-        {
-            _db.Games.Remove(game);
-            await _db.SaveChangesAsync();
-        }
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        await _db.StatEvents.Where(e => e.GameId == id).ExecuteDeleteAsync();
+        await _db.QuarterScores.Where(q => q.GameId == id).ExecuteDeleteAsync();
+        await _db.Games.Where(g => g.Id == id).ExecuteDeleteAsync();
+
+        await tx.CommitAsync();
     }
 
     public async Task UpdateGameStateAsync(int id, GameStatus status, int clockSecondsRemaining, int currentPeriod)

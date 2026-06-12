@@ -57,18 +57,30 @@ public partial class SeasonOverviewViewModel : ObservableObject
         await Shell.Current.GoToAsync(nameof(Views.AboutPage));
     }
 
+    /// <summary>
+    /// US-12: deleting a season is the most destructive action in the app, so it
+    /// requires typing the season's name — a single tap is never enough. The delete
+    /// cascades to the season's games, stats, teams and players.
+    /// </summary>
     [RelayCommand]
     private async Task DeleteSeasonAsync(Season season)
     {
-        bool confirm = await Shell.Current.DisplayAlertAsync(
+        string? typed = await Shell.Current.DisplayPromptAsync(
             "Delete Season",
-            $"Delete \"{season.Name}\" and all its teams and games?",
-            "Delete", "Cancel");
+            $"This permanently deletes \"{season.Name}\" with ALL its matches, stats, teams and players.\n\nType the season name to confirm:",
+            "Delete", "Cancel",
+            placeholder: season.Name);
 
-        if (confirm)
+        if (typed is null) return; // cancelled
+
+        if (!string.Equals(typed.Trim(), season.Name.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            await _seasonRepository.DeleteAsync(season.Id);
-            Seasons.Remove(season);
+            await Shell.Current.DisplayAlertAsync(
+                "Not Deleted", "The name didn't match — nothing was deleted.", "OK");
+            return;
         }
+
+        await _seasonRepository.DeleteAsync(season.Id);
+        Seasons.Remove(season);
     }
 }
