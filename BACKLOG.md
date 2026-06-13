@@ -300,12 +300,12 @@ Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is 
 - 🔄 **US-13** — Tell home from away in the rebound prompt (implemented; PR open).
 - 📋 **US-14** — Import & export a single game (planned).
 - 📋 **US-15** — Shot chart shows only the selected player (planned).
-- 📋 **US-16** — Explicit "leave game" button on the scoring screen (planned).
+- 🔄 **US-16** — Explicit "leave game" button on the scoring screen (implemented; PR open).
 
 ## Suggested implementation order (remaining)
 
 1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk. ✅ *done*
-2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing.
+2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing. ✅ *done*
 3. **US-15** — selected-player shot chart. Presentation-only; tiny `ShotDot.PlayerId` addition, no migration.
 4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in.
 

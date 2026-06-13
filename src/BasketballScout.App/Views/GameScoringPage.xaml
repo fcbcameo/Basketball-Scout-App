@@ -30,6 +30,11 @@
 
             <!-- Center: Clock + Buttons -->
             <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                <!-- Leave (resume later) — distinct from END which finishes the game (US-16) -->
+                <Button Text="← LEAVE" Command="{Binding LeaveGameCommand}"
+                        FontSize="13" FontAttributes="Bold" Padding="14,4"
+                        BackgroundColor="#1a1a1a" TextColor="#888" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="64" />
                 <Label Text="{Binding PeriodLabel}" FontSize="11" FontAttributes="Bold"
                        TextColor="#888" VerticalOptions="Center" CharacterSpacing="2" />
                 <Border StrokeShape="RoundRectangle 4" Stroke="#1a1a1a" StrokeThickness="1"

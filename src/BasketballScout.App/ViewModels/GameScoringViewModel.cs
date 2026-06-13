@@ -851,6 +851,19 @@ public partial class GameScoringViewModel : ObservableObject
         await Shell.Current.GoToAsync("..");
     }
 
+    /// <summary>US-16: leave an in-progress game without finishing it. The clock is
+    /// stopped and the exact state saved (status stays <see cref="GameStatus.InProgress"/>),
+    /// so the game still shows as Resume in the matches list. Distinct from Finish,
+    /// which marks the game complete. Needed because the scoring page hides the nav bar,
+    /// so there is otherwise no way off the screen except ending the game.</summary>
+    [RelayCommand]
+    private async Task LeaveGameAsync()
+    {
+        StopClock();                  // saved paused — never keeps ticking while away
+        await SaveStateAsync();       // _status is unchanged (InProgress)
+        await Shell.Current.GoToAsync("..");
+    }
+
     // ── Game clock ──
     [RelayCommand]
     private void ToggleClock()
