@@ -34,17 +34,20 @@ public partial class SeasonStatsViewModel : ObservableObject
     private List<SeasonGameSummary> _allGames = [];
 
     private readonly PdfReportService _pdfService;
+    private readonly ImportExportService _importExportService;
 
     public SeasonStatsViewModel(
         GameStatsService statsService,
         ITeamRepository teamRepository,
         IGameRepository gameRepository,
-        PdfReportService pdfService)
+        PdfReportService pdfService,
+        ImportExportService importExportService)
     {
         _statsService = statsService;
         _teamRepository = teamRepository;
         _gameRepository = gameRepository;
         _pdfService = pdfService;
+        _importExportService = importExportService;
     }
 
     partial void OnSeasonIdChanged(int value)
@@ -190,6 +193,38 @@ public partial class SeasonStatsViewModel : ObservableObject
 
         await _gameRepository.DeleteAsync(game.GameId);
         await ReloadAsync();
+    }
+
+    /// <summary>US-14: import a single-game JSON bundle into THIS season (the one being
+    /// viewed). Teams and players are matched to existing ones by name or created, so an
+    /// import never duplicates a roster or fails on an already-present team/player.</summary>
+    [RelayCommand]
+    private async Task ImportGameAsync()
+    {
+        try
+        {
+            var pick = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Select a game file (.json)"
+            });
+            if (pick is null) return; // cancelled
+
+            var json = await File.ReadAllTextAsync(pick.FullPath);
+            var r = await _importExportService.ImportGameAsync(json, SeasonId);
+
+            await ReloadAsync();
+            await Shell.Current.DisplayAlertAsync(
+                "Game Imported",
+                $"The game was added to this season.\n\n" +
+                $"Teams: {r.TeamsMatched} matched, {r.TeamsCreated} new\n" +
+                $"Players: {r.PlayersMatched} matched, {r.PlayersCreated} new\n" +
+                $"Stat events: {r.EventsImported}",
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Import Failed", ex.Message, "OK");
+        }
     }
 
     [RelayCommand]

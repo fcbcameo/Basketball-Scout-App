@@ -298,7 +298,7 @@ Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is 
 - ✅ **US-11** — Edit recorded stats of a finished game (PR #29, merged).
 - ✅ **US-12** — Delete games & seasons with confirmation (PR #30, merged).
 - ✅ **US-13** — Tell home from away in the rebound prompt (PR #31, merged).
-- 📋 **US-14** — Import & export a single game (planned).
+- 🔄 **US-14** — Import & export a single game (implemented; PR open).
 - 🔄 **US-15** — Shot chart shows only the selected player (implemented; PR open).
 - ✅ **US-16** — Explicit "leave game" button on the scoring screen (PR #31, merged).
 
@@ -307,7 +307,7 @@ Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is 
 1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk. ✅ *done*
 2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing. ✅ *done*
 3. **US-15** — selected-player shot chart. Presentation-only; tiny `ShotDot.PlayerId` addition, no migration. ✅ *done*
-4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in.
+4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in. ✅ *done*
 
 **Dependencies / sequencing rationale**
 - US-13 and US-15 are independent, low-risk UI changes touching only `GameScoringViewModel` / `GameScoringPage` — ship them first to improve live scouting immediately.
