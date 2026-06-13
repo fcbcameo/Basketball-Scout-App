@@ -236,11 +236,16 @@ Today `SetFollowUp` flattens `HomeOnCourt` + `AwayOnCourt` into a single `Follow
 - The exported file is **self-contained**: it embeds the game, both teams, their full rosters, every `StatEvent` (including shot locations, assist/rebound links, fouls) and `QuarterScore`s — enough to fully reconstruct the game on a device that has never seen it.
 - I can **import** such a file into a chosen season; the app recreates (or matches) the teams and players and adds the game with all its stats intact.
 - The imported game's score, box score, shot chart, and PDF match the original exactly.
+- **New vs existing players/teams is handled explicitly and predictably** — importing a game must never throw because a player or team "already exists" or is "missing". The rule is decided up front (see notes) and applied consistently, with the import telling me what it did (e.g. "matched 5 existing players, created 7 new"). No duplicate-player explosion on re-import, and no orphaned stat events pointing at a player that wasn't created.
 - Importing does **not** silently clobber existing data — a re-import of the same game is either skipped or clearly added as a separate copy (no half-merged state).
 - Import validates the file and fails gracefully on a malformed/incompatible file with a clear message.
 
 **Technical notes**
 First real use of the planned Sprint-4 `ImportExportService` + `System.Text.Json`. Define a versioned DTO graph (game → teams → players → stat events / quarter scores) so the schema can evolve. **Key subtlety:** primary keys can't be trusted across devices — on import, generate new `Team`/`Player`/`Game`/`StatEvent` ids and **remap every foreign key**, including `StatEvent.PlayerId`, `HomeTeamId`/`AwayTeamId`, and the self-referential `StatEvent.LinkedEventId` (assist→shot, rebound→miss) which must point at the newly-assigned event ids, not the originals. Let the user pick a target season at import time (reuse the season-picker pattern). Export via `Share`/`Launcher` with a `ReadOnlyFile`, mirroring the existing PDF share flow in `SeasonStatsViewModel`. Consider a stable per-game GUID stamped at creation to support the "skip duplicate vs add copy" decision.
+
+**New-vs-existing player/team rule (must be nailed down before coding to avoid import exceptions):** decide and document a single deterministic matching key, then apply it to *every* player and team in the bundle so there's never an unhandled case. Recommended approach — match a **team** within the target season by name (case-insensitive); if found, reuse it, else create it. Match a **player** *within that resolved team* — **by name**, not jersey number, because numbers are not a reliable identity (see below); if found, reuse and remap their stat events to the existing player id, else create the player. Embed a stable per-entity export GUID so future exports can match precisely even if names were edited. The importer builds an old-id → resolved-id map for teams and players first, then writes the game and stat events against the mapped ids — guaranteeing no event references an uncreated player.
+
+> **Note on jersey numbers (answers a product question):** today `Player.JerseyNumber` is a fixed attribute of the `Player` (one team, one number) — a player has the *same* number in every game, so matching imported players by number is unsafe (two players could share a number across the import boundary, or a number could have been reused). Match by name instead. If we ever want **per-game jersey numbers**, that's a separate schema change (move the number onto a per-game roster/lineup record, e.g. a `GamePlayer` join, rather than on `Player`) — call it out as a future story if the need arises; it would also change how box scores/PDFs label players per game.
 
 ---
 
@@ -261,6 +266,23 @@ First real use of the planned Sprint-4 `ImportExportService` + `System.Text.Json
 
 ---
 
+## US-16 — Explicit "leave game" button on the scoring screen 🚪
+**Priority:** High · **Size:** S · **Type:** UX Bug
+
+**As a** scorer, **I want** a visible way to leave an in-progress game without finishing it, **so that** I can step away (or check the matches list) and resume later — instead of being forced to "End" the game.
+
+**Acceptance criteria**
+- The scoring screen has a clearly labeled **Leave / Exit** control (distinct from **✓ END**) that takes me back to where I came from.
+- Leaving **keeps the game In Progress** — its clock, period, score, lineup and shot dots are saved, and it shows up as **Resume** in the matches list (US-10 behaviour), *not* as Finished.
+- **✓ END** keeps its current meaning (mark the game Finished); the two actions are visually distinct so I can't confuse "leave for now" with "end the game".
+- Works on iPad where there is no hardware/gesture back button.
+- If I leave with the clock running, it is saved **paused** (consistent with US-10) so it never keeps ticking while I'm away.
+
+**Technical notes**
+Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is **no back affordance at all** — the only exit is the `FinishGameCommand` ("✓ END") button. The leave-and-resume plumbing already exists: `OnDisappearing` calls `SaveStateAsync`, and the matches list offers Resume for `InProgress` games. So this is mostly a missing **UI control**: add a "← LEAVE" button in the scoreboard bar that calls `SaveStateAsync` then `Shell.Current.GoToAsync("..")` (a new `LeaveGameCommand`, mirroring `FinishGameAsync` minus the status change). Optionally also enable the system back (Android `OnBackButtonPressed` / a Shell back button) for parity, but the on-screen button is the must-have since iPad has no hardware back. Pure UX wiring — no data-model impact.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -275,15 +297,17 @@ First real use of the planned Sprint-4 `ImportExportService` + `System.Text.Json
 - ✅ **US-10** — Exit & resume an in-progress game (PR #28, merged).
 - ✅ **US-11** — Edit recorded stats of a finished game (PR #29, merged).
 - ✅ **US-12** — Delete games & seasons with confirmation (PR #30, merged).
-- 📋 **US-13** — Tell home from away in the rebound prompt (planned).
+- 🔄 **US-13** — Tell home from away in the rebound prompt (implemented; PR open).
 - 📋 **US-14** — Import & export a single game (planned).
 - 📋 **US-15** — Shot chart shows only the selected player (planned).
+- 📋 **US-16** — Explicit "leave game" button on the scoring screen (planned).
 
 ## Suggested implementation order (remaining)
 
-1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk.
-2. **US-15** — selected-player shot chart. Also presentation-only; tiny `ShotDot.PlayerId` addition, no migration.
-3. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in.
+1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk. ✅ *done*
+2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing.
+3. **US-15** — selected-player shot chart. Presentation-only; tiny `ShotDot.PlayerId` addition, no migration.
+4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in.
 
 **Dependencies / sequencing rationale**
 - US-13 and US-15 are independent, low-risk UI changes touching only `GameScoringViewModel` / `GameScoringPage` — ship them first to improve live scouting immediately.
