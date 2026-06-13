@@ -350,6 +350,7 @@ public partial class GameScoringViewModel : ObservableObject
                 ShotChartDots.Add(new ShotDot
                 {
                     EventId = e.Id,
+                    PlayerId = e.PlayerId,
                     X = e.CourtX.Value,
                     Y = e.CourtY.Value,
                     IsMade = e.ShotResult == ShotResult.Made,
@@ -426,6 +427,7 @@ public partial class GameScoringViewModel : ObservableObject
         ShotChartDots.Add(new ShotDot
         {
             EventId = statEvent.Id,
+            PlayerId = SelectedPlayer.Id,
             X = PendingShot.X,
             Y = PendingShot.Y,
             IsMade = confirmation.IsMade,
@@ -991,6 +993,7 @@ public class ShotConfirmation
 public class ShotDot
 {
     public int EventId { get; set; }
+    public int PlayerId { get; set; }
     public float X { get; set; }
     public float Y { get; set; }
     public bool IsMade { get; set; }

@@ -83,6 +83,9 @@ public partial class GameScoringPage : ContentPage
 
             case nameof(GameScoringViewModel.SelectedPlayer):
                 UpdatePlayerHighlighting();
+                // Re-filter the shot chart to just the selected player's dots (US-15);
+                // clearing the selection restores the full chart.
+                RenderShotDots();
                 UpdateCourtHint();
                 break;
         }
@@ -265,8 +268,16 @@ public partial class GameScoringPage : ContentPage
         foreach (var dot in dotsToRemove)
             CourtOverlay.Children.Remove(dot);
 
+        // US-15: when a player is selected, show only their shot dots; with no
+        // selection, show every dot. Hidden dots are never deleted — they reappear
+        // when their player is selected again or the selection is cleared.
+        var selectedId = _vm.SelectedPlayer?.Id;
+
         foreach (var shot in _vm.ShotChartDots)
         {
+            if (selectedId is not null && shot.PlayerId != selectedId)
+                continue;
+
             var madeColor = Color.FromArgb("#4ade80");
             var missColor = Color.FromArgb("#f87171");
             var color = shot.IsMade ? madeColor : missColor;
