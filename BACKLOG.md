@@ -210,6 +210,79 @@ Add delete commands on the appropriate ViewModels (matches overview / season lis
 
 ---
 
+## US-13 — Tell home from away in the rebound prompt 🎨
+**Priority:** High · **Size:** S · **Type:** UI
+
+**As a** scorer, **I want** the "who rebounded?" prompt to clearly separate the two teams, **so that** I don't accidentally credit the rebound to the wrong team's #11.
+
+**Acceptance criteria**
+- When the rebound (or any both-teams follow-up) prompt opens, each player chip is **tinted with that player's team color**.
+- The two teams are **visually separated** by a labeled divider (e.g. a "HOME" / "AWAY" header or a clear gap between the two groups) — I can tell at a glance which side a number belongs to.
+- The chosen player is still attributed correctly: a rebounder on the shooting team records an **offensive** rebound, one on the other team a **defensive** rebound (unchanged behaviour).
+- Works in both portrait and landscape; chip tap targets stay comfortably large (no shrinkage to fit the divider).
+
+**Technical notes**
+Today `SetFollowUp` flattens `HomeOnCourt` + `AwayOnCourt` into a single `FollowUpCandidates` list of jersey-number buttons with no team distinction (`GameScoringViewModel.cs`). Split that into two collections (e.g. `HomeFollowUpCandidates` / `AwayFollowUpCandidates`) — or wrap each candidate so it carries its team color + an `IsHome` flag — and render them as two labeled, divided groups in `GameScoringPage.xaml`, binding each chip's background to the team color. The OFF/DEF attribution logic already keys off which roster the player is on and needs no change. Pure presentation — no data-model or schema impact.
+
+---
+
+## US-14 — Import & export a single game 📤
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** scorer, **I want** to export one game from a season and import it elsewhere, **so that** I can back it up or hand it to another scorer without moving the whole season.
+
+**Acceptance criteria**
+- From a match (matches overview / box score) I can **export** it to a JSON file and send it via the native share sheet.
+- The exported file is **self-contained**: it embeds the game, both teams, their full rosters, every `StatEvent` (including shot locations, assist/rebound links, fouls) and `QuarterScore`s — enough to fully reconstruct the game on a device that has never seen it.
+- I can **import** such a file into a chosen season; the app recreates (or matches) the teams and players and adds the game with all its stats intact.
+- The imported game's score, box score, shot chart, and PDF match the original exactly.
+- **New vs existing players/teams is handled explicitly and predictably** — importing a game must never throw because a player or team "already exists" or is "missing". The rule is decided up front (see notes) and applied consistently, with the import telling me what it did (e.g. "matched 5 existing players, created 7 new"). No duplicate-player explosion on re-import, and no orphaned stat events pointing at a player that wasn't created.
+- Importing does **not** silently clobber existing data — a re-import of the same game is either skipped or clearly added as a separate copy (no half-merged state).
+- Import validates the file and fails gracefully on a malformed/incompatible file with a clear message.
+
+**Technical notes**
+First real use of the planned Sprint-4 `ImportExportService` + `System.Text.Json`. Define a versioned DTO graph (game → teams → players → stat events / quarter scores) so the schema can evolve. **Key subtlety:** primary keys can't be trusted across devices — on import, generate new `Team`/`Player`/`Game`/`StatEvent` ids and **remap every foreign key**, including `StatEvent.PlayerId`, `HomeTeamId`/`AwayTeamId`, and the self-referential `StatEvent.LinkedEventId` (assist→shot, rebound→miss) which must point at the newly-assigned event ids, not the originals. Let the user pick a target season at import time (reuse the season-picker pattern). Export via `Share`/`Launcher` with a `ReadOnlyFile`, mirroring the existing PDF share flow in `SeasonStatsViewModel`. Consider a stable per-game GUID stamped at creation to support the "skip duplicate vs add copy" decision.
+
+**New-vs-existing player/team rule (must be nailed down before coding to avoid import exceptions):** decide and document a single deterministic matching key, then apply it to *every* player and team in the bundle so there's never an unhandled case. Recommended approach — match a **team** within the target season by name (case-insensitive); if found, reuse it, else create it. Match a **player** *within that resolved team* — **by name**, not jersey number, because numbers are not a reliable identity (see below); if found, reuse and remap their stat events to the existing player id, else create the player. Embed a stable per-entity export GUID so future exports can match precisely even if names were edited. The importer builds an old-id → resolved-id map for teams and players first, then writes the game and stat events against the mapped ids — guaranteeing no event references an uncreated player.
+
+> **Note on jersey numbers (answers a product question):** today `Player.JerseyNumber` is a fixed attribute of the `Player` (one team, one number) — a player has the *same* number in every game, so matching imported players by number is unsafe (two players could share a number across the import boundary, or a number could have been reused). Match by name instead. If we ever want **per-game jersey numbers**, that's a separate schema change (move the number onto a per-game roster/lineup record, e.g. a `GamePlayer` join, rather than on `Player`) — call it out as a future story if the need arises; it would also change how box scores/PDFs label players per game.
+
+---
+
+## US-15 — Shot chart shows only the selected player 🎯
+**Priority:** Medium · **Size:** S · **Type:** Feature
+
+**As a** scorer, **I want** the court to show only the selected player's makes and misses, **so that** I can read one player's shot pattern without both teams' dots cluttering the court.
+
+**Acceptance criteria**
+- With a player selected, the court shows **only that player's** shot dots (makes ✓ / misses ✗); all other dots are hidden.
+- With **no player selected**, the court shows **all** dots as it does today.
+- Selecting a different player switches the visible dots immediately; deselecting restores the full chart.
+- Hidden dots are not deleted — they reappear when their player is selected again or selection is cleared.
+- Works while live scoring and on resume (the rebuilt-from-events chart respects the same filter).
+
+**Technical notes**
+`ShotDot` currently carries only `EventId, X, Y, IsMade` — add `PlayerId` and populate it both in the live `RecordShot` path and in `RebuildFromEvents` (`GameScoringViewModel.cs`). Filter on `SelectedPlayer`: either bind each dot's `IsVisible` to "no selection OR dot.PlayerId == SelectedPlayer.Id", or keep a full backing list and re-project into the bound `ShotChartDots` collection whenever `SelectedPlayer` changes (`OnSelectedPlayerChanged`). Presentation-only; no schema impact (events already store `PlayerId`).
+
+---
+
+## US-16 — Explicit "leave game" button on the scoring screen 🚪
+**Priority:** High · **Size:** S · **Type:** UX Bug
+
+**As a** scorer, **I want** a visible way to leave an in-progress game without finishing it, **so that** I can step away (or check the matches list) and resume later — instead of being forced to "End" the game.
+
+**Acceptance criteria**
+- The scoring screen has a clearly labeled **Leave / Exit** control (distinct from **✓ END**) that takes me back to where I came from.
+- Leaving **keeps the game In Progress** — its clock, period, score, lineup and shot dots are saved, and it shows up as **Resume** in the matches list (US-10 behaviour), *not* as Finished.
+- **✓ END** keeps its current meaning (mark the game Finished); the two actions are visually distinct so I can't confuse "leave for now" with "end the game".
+- Works on iPad where there is no hardware/gesture back button.
+- If I leave with the clock running, it is saved **paused** (consistent with US-10) so it never keeps ticking while I'm away.
+
+**Technical notes**
+Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is **no back affordance at all** — the only exit is the `FinishGameCommand` ("✓ END") button. The leave-and-resume plumbing already exists: `OnDisappearing` calls `SaveStateAsync`, and the matches list offers Resume for `InProgress` games. So this is mostly a missing **UI control**: add a "← LEAVE" button in the scoreboard bar that calls `SaveStateAsync` then `Shell.Current.GoToAsync("..")` (a new `LeaveGameCommand`, mirroring `FinishGameAsync` minus the status change). Optionally also enable the system back (Android `OnBackButtonPressed` / a Shell back button) for parity, but the on-screen button is the must-have since iPad has no hardware back. Pure UX wiring — no data-model impact.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -223,15 +296,19 @@ Add delete commands on the appropriate ViewModels (matches overview / season lis
 - ✅ **US-9** — Reposition a pending shot (merged).
 - ✅ **US-10** — Exit & resume an in-progress game (PR #28, merged).
 - ✅ **US-11** — Edit recorded stats of a finished game (PR #29, merged).
-- 🔄 **US-12** — Delete games & seasons with confirmation (implemented; PR open).
+- ✅ **US-12** — Delete games & seasons with confirmation (PR #30, merged).
+- 🔄 **US-13** — Tell home from away in the rebound prompt (implemented; PR open).
+- 📋 **US-14** — Import & export a single game (planned).
+- 📋 **US-15** — Shot chart shows only the selected player (planned).
+- 🔄 **US-16** — Explicit "leave game" button on the scoring screen (implemented; PR open).
 
 ## Suggested implementation order (remaining)
 
-1. **US-10** — exit & resume in-progress game. Foundational: introduces the `GameStatus` field that US-11 and US-12 both lean on, and the persisted clock/period state.
-2. **US-11** — edit finished-game stats. Builds on US-5's reversal/adjust logic and on US-10's clean Finished status.
-3. **US-12** — delete games & seasons. Cleanest last: cascade rules are simpler to reason about once lifecycle status exists.
+1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk. ✅ *done*
+2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing. ✅ *done*
+3. **US-15** — selected-player shot chart. Presentation-only; tiny `ShotDot.PlayerId` addition, no migration.
+4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in.
 
 **Dependencies / sequencing rationale**
-- US-10 first: the `GameStatus` enum + migration unblocks US-11 ("finished" games to edit) and US-12 (a clear In-Progress vs Finished distinction for delete guards), and it replaces the brittle "has events = played" inference behind US-6.
-- US-11 reuses US-5's `ApplyReversal` + per-player counter logic; shot **location** stays locked while result/attribution remain editable.
-- US-12 last: cascade-delete behavior (`Season → Game → StatEvent/QuarterScore`) is easiest to verify once the model is otherwise stable.
+- US-13 and US-15 are independent, low-risk UI changes touching only `GameScoringViewModel` / `GameScoringPage` — ship them first to improve live scouting immediately.
+- US-14 is self-contained but the heaviest: the self-contained-bundle format and the `LinkedEventId`/`PlayerId`/team FK remapping on import are the real work, and it introduces the import/export plumbing the rest of Sprint 4 (season export, CSV) will reuse.

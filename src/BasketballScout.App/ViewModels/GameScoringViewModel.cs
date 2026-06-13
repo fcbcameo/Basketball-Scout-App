@@ -93,6 +93,17 @@ public partial class GameScoringViewModel : ObservableObject
     [ObservableProperty]
     public partial FollowUpState? FollowUp { get; set; }
 
+    // Rebound/assist prompt is split per team (US-13) so home and away are visually
+    // distinct: each group is tinted with its team color and separated by a divider.
+    [ObservableProperty]
+    public partial bool HasHomeFollowUpCandidates { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasAwayFollowUpCandidates { get; set; }
+
+    [ObservableProperty]
+    public partial bool ShowFollowUpDivider { get; set; }
+
     [ObservableProperty]
     public partial bool IsCorrectionsOpen { get; set; }
 
@@ -103,7 +114,8 @@ public partial class GameScoringViewModel : ObservableObject
     public ObservableCollection<Player> AwayBench { get; } = new();
     public ObservableCollection<ShotDot> ShotChartDots { get; } = new();
     public ObservableCollection<PlayLogEntry> PlayLog { get; } = new();
-    public ObservableCollection<Player> FollowUpCandidates { get; } = new();
+    public ObservableCollection<FollowUpCandidate> HomeFollowUpCandidates { get; } = new();
+    public ObservableCollection<FollowUpCandidate> AwayFollowUpCandidates { get; } = new();
     public ObservableCollection<CorrectionEntry> RecentEvents { get; } = new();
     public ObservableCollection<PlayerFoulRow> FoulRows { get; } = new();
 
@@ -438,26 +450,35 @@ public partial class GameScoringViewModel : ObservableObject
     // ── Follow-up (assist/rebound) ──
     private void SetFollowUp(string type, int linkedEventId)
     {
-        FollowUpCandidates.Clear();
+        HomeFollowUpCandidates.Clear();
+        AwayFollowUpCandidates.Clear();
+
+        var homeColor = Color.FromArgb(HomeTeamColor);
+        var awayColor = Color.FromArgb(AwayTeamColor);
 
         if (type == "assist")
         {
-            // Teammates on court, excluding the scorer
+            // Teammates on court (the scorer's team only), excluding the scorer.
             var teammates = IsHomeSelected ? HomeOnCourt : AwayOnCourt;
+            var target = IsHomeSelected ? HomeFollowUpCandidates : AwayFollowUpCandidates;
+            var color = IsHomeSelected ? homeColor : awayColor;
             foreach (var p in teammates)
             {
                 if (p.Id != SelectedPlayer?.Id)
-                    FollowUpCandidates.Add(p);
+                    target.Add(new FollowUpCandidate(p, color));
             }
         }
-        else // rebound
+        else // rebound — on-court players from both teams, kept in separate groups
         {
-            // ALL on-court players from both teams
             foreach (var p in HomeOnCourt)
-                FollowUpCandidates.Add(p);
+                HomeFollowUpCandidates.Add(new FollowUpCandidate(p, homeColor));
             foreach (var p in AwayOnCourt)
-                FollowUpCandidates.Add(p);
+                AwayFollowUpCandidates.Add(new FollowUpCandidate(p, awayColor));
         }
+
+        HasHomeFollowUpCandidates = HomeFollowUpCandidates.Count > 0;
+        HasAwayFollowUpCandidates = AwayFollowUpCandidates.Count > 0;
+        ShowFollowUpDivider = HasHomeFollowUpCandidates && HasAwayFollowUpCandidates;
 
         FollowUp = new FollowUpState(type, linkedEventId);
     }
@@ -465,7 +486,11 @@ public partial class GameScoringViewModel : ObservableObject
     private void ClearFollowUp()
     {
         FollowUp = null;
-        FollowUpCandidates.Clear();
+        HomeFollowUpCandidates.Clear();
+        AwayFollowUpCandidates.Clear();
+        HasHomeFollowUpCandidates = false;
+        HasAwayFollowUpCandidates = false;
+        ShowFollowUpDivider = false;
     }
 
     [RelayCommand]
@@ -826,6 +851,19 @@ public partial class GameScoringViewModel : ObservableObject
         await Shell.Current.GoToAsync("..");
     }
 
+    /// <summary>US-16: leave an in-progress game without finishing it. The clock is
+    /// stopped and the exact state saved (status stays <see cref="GameStatus.InProgress"/>),
+    /// so the game still shows as Resume in the matches list. Distinct from Finish,
+    /// which marks the game complete. Needed because the scoring page hides the nav bar,
+    /// so there is otherwise no way off the screen except ending the game.</summary>
+    [RelayCommand]
+    private async Task LeaveGameAsync()
+    {
+        StopClock();                  // saved paused — never keeps ticking while away
+        await SaveStateAsync();       // _status is unchanged (InProgress)
+        await Shell.Current.GoToAsync("..");
+    }
+
     // ── Game clock ──
     [RelayCommand]
     private void ToggleClock()
@@ -974,6 +1012,21 @@ public class PlayerFoulRow
     public string Label { get; set; } = string.Empty;
     public int Fouls { get; set; }
     public string Color { get; set; } = "#888";
+}
+
+/// <summary>A player offered in the assist/rebound prompt, carrying the team color used
+/// to tint its chip so home and away are visually distinct (US-13).</summary>
+public class FollowUpCandidate
+{
+    public FollowUpCandidate(Player player, Color chipColor)
+    {
+        Player = player;
+        ChipColor = chipColor;
+    }
+
+    public Player Player { get; }
+    public Color ChipColor { get; }
+    public string Display => $"#{Player.JerseyNumber}";
 }
 
 public class FollowUpState

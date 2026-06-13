@@ -30,6 +30,11 @@
 
             <!-- Center: Clock + Buttons -->
             <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                <!-- Leave (resume later) — distinct from END which finishes the game (US-16) -->
+                <Button Text="← LEAVE" Command="{Binding LeaveGameCommand}"
+                        FontSize="13" FontAttributes="Bold" Padding="14,4"
+                        BackgroundColor="#1a1a1a" TextColor="#888" CornerRadius="4"
+                        HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="64" />
                 <Label Text="{Binding PeriodLabel}" FontSize="11" FontAttributes="Bold"
                        TextColor="#888" VerticalOptions="Center" CharacterSpacing="2" />
                 <Border StrokeShape="RoundRectangle 4" Stroke="#1a1a1a" StrokeThickness="1"
@@ -258,23 +263,55 @@
                             <Label x:Name="FollowUpLabel" Text="ASSISTED BY?"
                                    FontSize="9" FontAttributes="Bold" TextColor="#555"
                                    CharacterSpacing="1" />
-                            <!-- Player buttons via BindableLayout -->
-                            <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
-                                        BindableLayout.ItemsSource="{Binding FollowUpCandidates}">
-                                <BindableLayout.ItemTemplate>
-                                    <DataTemplate x:DataType="models:Player">
-                                        <Button Text="{Binding JerseyNumber, StringFormat='#{0}'}"
-                                                FontSize="16" FontAttributes="Bold"
-                                                BackgroundColor="#1e1e1e" TextColor="#ddd"
-                                                BorderColor="#333" BorderWidth="1"
-                                                CornerRadius="6" Padding="14,9"
-                                                Margin="0,0,4,4"
-                                                HeightRequest="46" MinimumHeightRequest="46" MinimumWidthRequest="52"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
-                                                CommandParameter="{Binding .}" />
-                                    </DataTemplate>
-                                </BindableLayout.ItemTemplate>
-                            </FlexLayout>
+                            <!-- HOME group: chips tinted with the home team color (US-13) -->
+                            <VerticalStackLayout IsVisible="{Binding HasHomeFollowUpCandidates}" Spacing="3">
+                                <Label Text="{Binding HomeTeamName}" FontSize="8" FontAttributes="Bold"
+                                       TextColor="{Binding HomeTeamColor}" CharacterSpacing="1"
+                                       TextTransform="Uppercase" />
+                                <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
+                                            BindableLayout.ItemsSource="{Binding HomeFollowUpCandidates}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FollowUpCandidate">
+                                            <Button Text="{Binding Display}"
+                                                    FontSize="16" FontAttributes="Bold"
+                                                    BackgroundColor="{Binding ChipColor}" TextColor="White"
+                                                    BorderColor="#00000055" BorderWidth="1"
+                                                    CornerRadius="6" Padding="14,9"
+                                                    Margin="0,0,4,4"
+                                                    HeightRequest="46" MinimumHeightRequest="46" MinimumWidthRequest="52"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
+                                                    CommandParameter="{Binding Player}" />
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+                            </VerticalStackLayout>
+
+                            <!-- Divider between the two teams (only when both are shown) -->
+                            <BoxView IsVisible="{Binding ShowFollowUpDivider}"
+                                     HeightRequest="1" Color="#2a2a2a" Margin="0,2" />
+
+                            <!-- AWAY group: chips tinted with the away team color (US-13) -->
+                            <VerticalStackLayout IsVisible="{Binding HasAwayFollowUpCandidates}" Spacing="3">
+                                <Label Text="{Binding AwayTeamName}" FontSize="8" FontAttributes="Bold"
+                                       TextColor="{Binding AwayTeamColor}" CharacterSpacing="1"
+                                       TextTransform="Uppercase" />
+                                <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
+                                            BindableLayout.ItemsSource="{Binding AwayFollowUpCandidates}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FollowUpCandidate">
+                                            <Button Text="{Binding Display}"
+                                                    FontSize="16" FontAttributes="Bold"
+                                                    BackgroundColor="{Binding ChipColor}" TextColor="White"
+                                                    BorderColor="#00000055" BorderWidth="1"
+                                                    CornerRadius="6" Padding="14,9"
+                                                    Margin="0,0,4,4"
+                                                    HeightRequest="46" MinimumHeightRequest="46" MinimumWidthRequest="52"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=HandleFollowUpCommand}"
+                                                    CommandParameter="{Binding Player}" />
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+                            </VerticalStackLayout>
                             <Button Text="SKIP" FontSize="12" FontAttributes="Bold"
                                     BackgroundColor="#141414" TextColor="#666"
                                     CornerRadius="6" Padding="14,9"
