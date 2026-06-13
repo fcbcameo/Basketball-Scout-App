@@ -12,23 +12,33 @@
         <VerticalStackLayout Padding="12" Spacing="12">
 
             <!-- Action buttons -->
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                <Button Text="Share Game Report PDF"
-                        Command="{Binding SharePdfCommand}"
-                        BackgroundColor="#e85d26"
-                        TextColor="White"
+            <VerticalStackLayout Spacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <Button Text="Share Game Report PDF"
+                            Command="{Binding SharePdfCommand}"
+                            BackgroundColor="#e85d26"
+                            TextColor="White"
+                            FontAttributes="Bold"
+                            CornerRadius="8"
+                            HeightRequest="42" />
+                    <Button Grid.Column="1" Text="✎ Edit Stats"
+                            Command="{Binding EditStatsCommand}"
+                            BackgroundColor="#1a2336"
+                            TextColor="#60a5fa"
+                            FontAttributes="Bold"
+                            CornerRadius="8"
+                            HeightRequest="42"
+                            Padding="14,0" />
+                </Grid>
+                <!-- US-14: export this game as a self-contained JSON bundle -->
+                <Button Text="⤴ Export Game (JSON)"
+                        Command="{Binding ExportGameCommand}"
+                        BackgroundColor="#13251a"
+                        TextColor="#34d399"
                         FontAttributes="Bold"
                         CornerRadius="8"
                         HeightRequest="42" />
-                <Button Grid.Column="1" Text="✎ Edit Stats"
-                        Command="{Binding EditStatsCommand}"
-                        BackgroundColor="#1a2336"
-                        TextColor="#60a5fa"
-                        FontAttributes="Bold"
-                        CornerRadius="8"
-                        HeightRequest="42"
-                        Padding="14,0" />
-            </Grid>
+            </VerticalStackLayout>
 
             <!-- Scoreboard Header -->
             <Border Padding="16" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"

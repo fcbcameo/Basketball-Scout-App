@@ -10,6 +10,7 @@ public partial class GameBoxScoreViewModel : ObservableObject
 {
     private readonly GameStatsService _statsService;
     private readonly PdfReportService _pdfService;
+    private readonly ImportExportService _importExportService;
 
     [ObservableProperty]
     public partial int GameId { get; set; }
@@ -29,10 +30,14 @@ public partial class GameBoxScoreViewModel : ObservableObject
     public ObservableCollection<PlayerBoxLine> HomeLines { get; } = [];
     public ObservableCollection<PlayerBoxLine> AwayLines { get; } = [];
 
-    public GameBoxScoreViewModel(GameStatsService statsService, PdfReportService pdfService)
+    public GameBoxScoreViewModel(
+        GameStatsService statsService,
+        PdfReportService pdfService,
+        ImportExportService importExportService)
     {
         _statsService = statsService;
         _pdfService = pdfService;
+        _importExportService = importExportService;
     }
 
     [RelayCommand]
@@ -43,6 +48,33 @@ public partial class GameBoxScoreViewModel : ObservableObject
 
     /// <summary>Re-reads the box score — called when returning from the stat editor (US-11).</summary>
     public Task ReloadAsync() => GameId > 0 ? LoadAsync(GameId) : Task.CompletedTask;
+
+    /// <summary>US-14: export this game as a self-contained JSON bundle and offer it via
+    /// the native share sheet, so it can be backed up or handed to another scorer.</summary>
+    [RelayCommand]
+    private async Task ExportGameAsync()
+    {
+        try
+        {
+            var json = await _importExportService.ExportGameAsync(GameId);
+            var safeHome = MakeFileSafe(HomeTeamName);
+            var safeAway = MakeFileSafe(AwayTeamName);
+            var safeDate = GameDateDisplay.Replace(" ", "").Replace(",", "");
+            var fileName = $"Game_{safeHome}_vs_{safeAway}_{safeDate}.json";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(filePath, json);
+
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = $"Game — {ScoreDisplay}",
+                File = new ShareFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to export game: {ex.Message}", "OK");
+        }
+    }
 
     [RelayCommand]
     private async Task SharePdfAsync()

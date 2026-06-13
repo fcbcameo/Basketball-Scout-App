@@ -20,6 +20,15 @@
                     CornerRadius="8"
                     HeightRequest="42" />
 
+            <!-- US-14: import a single-game JSON bundle into this season -->
+            <Button Text="⤵ Import Game (JSON)"
+                    Command="{Binding ImportGameCommand}"
+                    BackgroundColor="#13251a"
+                    TextColor="#34d399"
+                    FontAttributes="Bold"
+                    CornerRadius="8"
+                    HeightRequest="42" />
+
             <!-- Games Section -->
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">
