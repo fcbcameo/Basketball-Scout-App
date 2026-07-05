@@ -11,9 +11,6 @@ public class GameStatsService
     private readonly ITeamRepository _teamRepository;
     private readonly IPlayerRepository _playerRepository;
 
-    // Each regulation quarter is 10 minutes.
-    private const int QuarterSeconds = 600;
-
     public GameStatsService(
         IGameRepository gameRepository,
         IStatEventRepository statEventRepository,
@@ -138,7 +135,9 @@ public class GameStatsService
             };
         }
 
-        foreach (var game in games)
+        // Season averages aggregate only completed games — an in-progress game holds a
+        // partial stat line that would otherwise drag down every participant's averages.
+        foreach (var game in games.Where(g => g.Status == GameStatus.Finished))
         {
             var events = await _statEventRepository.GetByGameIdAsync(game.Id);
             var homeTeam = teams.FirstOrDefault(t => t.Id == game.HomeTeamId);
@@ -190,7 +189,8 @@ public class GameStatsService
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
         var shots = new List<ShotChartPoint>();
 
-        foreach (var game in games)
+        // Only completed games, to stay consistent with the season averages shown alongside.
+        foreach (var game in games.Where(g => g.Status == GameStatus.Finished))
         {
             var events = await _statEventRepository.GetByGameIdAsync(game.Id);
             foreach (var e in events.Where(ev =>
@@ -234,7 +234,7 @@ public class GameStatsService
 
         // Order events by absolute time + id for a stable timeline
         var ordered = events
-            .Select(e => new { Event = e, AbsSec = ToAbsoluteSeconds(e) })
+            .Select(e => new { Event = e, AbsSec = GameTiming.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
             .OrderBy(x => x.AbsSec)
             .ThenBy(x => x.Event.Id)
             .ToList();
@@ -331,24 +331,6 @@ public class GameStatsService
             StatType.FreeThrow => 1,
             _ => 0
         };
-    }
-
-    private static int ToAbsoluteSeconds(StatEvent e)
-    {
-        int remaining = ParseClockSeconds(e.GameClock);
-        int elapsedInQuarter = Math.Max(0, QuarterSeconds - remaining);
-        int q = Math.Max(1, e.Quarter);
-        return (q - 1) * QuarterSeconds + elapsedInQuarter;
-    }
-
-    private static int ParseClockSeconds(string clock)
-    {
-        if (string.IsNullOrWhiteSpace(clock)) return QuarterSeconds;
-        var parts = clock.Split(':');
-        if (parts.Length != 2) return QuarterSeconds;
-        if (!int.TryParse(parts[0], out var m)) return QuarterSeconds;
-        if (!int.TryParse(parts[1], out var s)) return QuarterSeconds;
-        return Math.Clamp(m * 60 + s, 0, QuarterSeconds);
     }
 
     // ── Box-line building ──

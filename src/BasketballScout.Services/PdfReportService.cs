@@ -342,19 +342,27 @@ public class PdfReportService
                 plotX, yy, plotX + plotW, yy);
         }
 
-        // Quarter vertical dividers (1,2,3,4 labels at top)
-        int maxSec = flow[^1].AbsSec <= 0 ? 2400 : flow[^1].AbsSec;
-        for (int q = 1; q <= 4; q++)
+        // Period vertical dividers + labels, positioned at each period boundary as a
+        // fraction of the game's true length — OT-aware (labels 1–4, then OT1, OT2, …).
+        int maxSec = flow[^1].AbsSec <= 0 ? GameTiming.RegulationLengthSeconds : flow[^1].AbsSec;
+        int boundary = 0;
+        int period = 1;
+        while (boundary < maxSec)
         {
-            double fx = plotX + (q - 1) / 4.0 * plotW;
-            if (q > 1)
+            double fx = plotX + (boundary / (double)maxSec) * plotW;
+            if (period > 1)
             {
                 gfx.DrawLine(new XPen(XColor.FromArgb(0xBB, 0xBB, 0xBB), 0.4)
                 { DashStyle = XDashStyle.Dash },
                     fx, plotY, fx, plotY + plotH);
             }
-            gfx.DrawString(q.ToString(), TinyFont, new XSolidBrush(TextSecondary),
-                new XRect(fx, plotY - 10, plotW / 4, 8), XStringFormats.Center);
+            int periodLen = GameTiming.PeriodLengthSeconds(period);
+            double sliceW = (periodLen / (double)maxSec) * plotW;
+            string label = period <= 4 ? period.ToString() : $"OT{period - 4}";
+            gfx.DrawString(label, TinyFont, new XSolidBrush(TextSecondary),
+                new XRect(fx, plotY - 10, sliceW, 8), XStringFormats.Center);
+            boundary += periodLen;
+            period++;
         }
 
         // Draw both lines
@@ -784,18 +792,18 @@ public class PdfReportService
 
         var turnovers = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.Turnover)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => ParseClockSeconds(e.GameClock))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var personalFouls = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.PersonalFoul)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => ParseClockSeconds(e.GameClock))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var technicalFouls = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.TechnicalFoul)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => ParseClockSeconds(e.GameClock))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var allFouls = personalFouls.Concat(technicalFouls)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => ParseClockSeconds(e.GameClock))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
             .ToList();
 
         var page = AddPage(doc);
@@ -926,10 +934,14 @@ public class PdfReportService
         IReadOnlyList<StatEvent> events,
         HashSet<int> homeIds, HashSet<int> awayIds)
     {
+        int maxPeriod = 4;
+        foreach (var e in events) maxPeriod = Math.Max(maxPeriod, e.Quarter);
+        int totalSeconds = GameTiming.TotalSecondsForMaxPeriod(maxPeriod);
+
         var ordered = events
             .Where(e => e.ShotResult == ShotResult.Made &&
                 (e.StatType == StatType.Points2 || e.StatType == StatType.Points3 || e.StatType == StatType.FreeThrow))
-            .Select(e => new { Event = e, AbsSec = ToAbsoluteSeconds(e) })
+            .Select(e => new { Event = e, AbsSec = GameTiming.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
             .OrderBy(x => x.AbsSec).ThenBy(x => x.Event.Id)
             .ToList();
 
@@ -948,30 +960,11 @@ public class PdfReportService
             else if (awayIds.Contains(x.Event.PlayerId)) a += p;
             pts.Add(new FlowPoint(x.AbsSec, h, a));
         }
-        // Always end at 2400s for proper X-axis scaling
-        if (pts.Count == 0 || pts[^1].AbsSec < 2400)
-            pts.Add(new FlowPoint(2400, h, a));
+        // End at the game's true total length (regulation, or later if it went to OT)
+        // so the X-axis spans the whole game.
+        if (pts.Count == 0 || pts[^1].AbsSec < totalSeconds)
+            pts.Add(new FlowPoint(totalSeconds, h, a));
         return pts;
-    }
-
-    private const int QuarterSeconds = 600;
-
-    private static int ToAbsoluteSeconds(StatEvent e)
-    {
-        int remaining = ParseClockSeconds(e.GameClock);
-        int elapsedInQuarter = Math.Max(0, QuarterSeconds - remaining);
-        int q = Math.Max(1, e.Quarter);
-        return (q - 1) * QuarterSeconds + elapsedInQuarter;
-    }
-
-    private static int ParseClockSeconds(string clock)
-    {
-        if (string.IsNullOrWhiteSpace(clock)) return QuarterSeconds;
-        var parts = clock.Split(':');
-        if (parts.Length != 2) return QuarterSeconds;
-        if (!int.TryParse(parts[0], out var m)) return QuarterSeconds;
-        if (!int.TryParse(parts[1], out var s)) return QuarterSeconds;
-        return Math.Clamp(m * 60 + s, 0, QuarterSeconds);
     }
 
     private record FlowPoint(int AbsSec, int HomeScore, int AwayScore);

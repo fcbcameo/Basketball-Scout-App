@@ -261,6 +261,12 @@ public partial class GameEditViewModel : ObservableObject
             "Save", "Cancel");
         if (!confirm) return;
 
+        // Also remove any follow-up (assist/rebound) whose linked shot/miss is being
+        // removed, so no phantom assist survives a basket that no longer exists.
+        foreach (var dep in _events)
+            if (dep.LinkedEventId is int linkedId && _pendingRemoveIds.Contains(linkedId))
+                _pendingRemoveIds.Add(dep.Id);
+
         foreach (var id in _pendingRemoveIds)
             await _statEventRepository.DeleteAsync(id);
         foreach (var e in _pendingAdds)
