@@ -283,6 +283,250 @@ Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is 
 
 ---
 
+# Code-review batch (2026-07-05)
+
+Stories US-17 … US-30 come out of a full code review after the US-13…16 batch: three bug-fix stories first, then the improvements that push the app from "stat tracker" to "first-class scout app". Dutch localization was explicitly excluded by the product owner.
+
+---
+
+## US-17 — Fix crashes & leaks 🧯
+**Priority:** Critical · **Size:** M · **Type:** Bug
+
+**As a** user, **I want** the app to never crash or silently waste resources during normal roster and game management, **so that** I can trust it courtside.
+
+**Acceptance criteria**
+- **Deleting a player who has recorded stats no longer crashes.** The app detects the situation and either blocks with a clear message or offers "mark inactive instead" (player disappears from lineup pickers but history stays intact).
+- **Leaving the scoring screen via hardware/gesture back with the clock running stops the clock timer.** No background ticking, no leaked ViewModel; on resume the clock shows the value at the moment of leaving (paused).
+- The clock reaching **0:00 while running persists the state** (same as a manual pause).
+- An unknown quick-stat id is **ignored** (with a debug log) instead of silently recording a Turnover.
+- The game-import file picker filters to **JSON files** like every other picker in the app.
+- Season export file names are **sanitized** (`MakeFileSafe`) so a season name with `/` or `:` can't fail the export.
+
+**Technical notes**
+Crash root cause: `TeamDetailViewModel.DeletePlayerAsync` → `PlayerRepository.DeleteAsync` with `StatEvent→Player` configured `DeleteBehavior.Restrict` (`ScoutDbContext`) — any player with even a lineup `SubIn` event trips an unhandled `DbUpdateException`. Check `StatEvents.AnyAsync(e => e.PlayerId == id)` first; offer `IsActive = false` as the alternative. Timer leak: `GameScoringPage.OnDisappearing` calls `SaveStateAsync` but never `StopClock()`; an enabled `System.Timers.Timer` is GC-rooted, so the abandoned VM keeps firing every second. Also save state in `OnClockTick` when it hits zero. Small fixes: `RecordStatAsync` `_ =>` fallback arm; `PickOptions.FileTypes` in `SeasonStatsViewModel.ImportGameAsync`; `MakeFileSafe` in `SeasonDetailViewModel.ExportSeasonAsync`.
+
+---
+
+## US-18 — Fix stat correctness (OT minutes, averages, undo desync) 📐
+**Priority:** High · **Size:** M · **Type:** Bug
+
+**As a** scorer, **I want** minutes, +/- and season averages to be exactly right — including overtime games and after corrections — **so that** the reports I share are trustworthy.
+
+**Acceptance criteria**
+- **Overtime games credit correct minutes and +/-**: no phantom +5:00 per OT period for players on court across the regulation→OT boundary. Verified with a test game that goes to OT1/OT2.
+- The PDF **game-flow chart** labels periods correctly for OT games (dividers no longer assume exactly 4 quarters).
+- **Season averages only aggregate Finished games** — an in-progress game no longer drags down PPG/RPG/etc. of everyone who appears in it.
+- **Undo removes the matching play-by-play row**, not blindly the top one — undoing a stat that happened before a substitution leaves the SUB line in place.
+- Undo picks a deterministic event when two share a timestamp (tie-break by id).
+- **Deleting a made shot (stat editor or corrections drawer) handles its linked assist** — and a deleted miss its linked rebound: either removed along with it after a prompt, or the user is clearly warned. No phantom assists for baskets that no longer exist.
+
+**Technical notes**
+OT bug: `ToAbsoluteSeconds` in **both** `GameStatsService` and `PdfReportService` assumes 600s periods; OT clocks start at 5:00, leaving a 300s gap at each boundary. Make the mapping period-length-aware (regulation 600s, OT 300s — mirror `GameScoringViewModel.PeriodLengthSeconds`) and compute period offsets cumulatively. Deduplicate the two copies into one shared helper while at it. Averages: filter `game.Status == GameStatus.Finished` in `GetSeasonStatsAsync` (and decide explicitly for `GetPlayerShotChartAsync`). Undo desync: `UndoAsync` deletes the latest non-sub event but does `PlayLog.RemoveAt(0)` — find the log row matching the event instead (or rebuild the top of the log); add `.ThenByDescending(e => e.Id)`. Linked events: on delete of an event that others link to (`LinkedEventId` — DB is `SetNull` so no crash), look up dependents and prompt "also remove the linked assist?" in `GameEditViewModel` and the corrections drawer.
+
+---
+
+## US-19 — Import/export integrity: season parity, transactions, preview 📦
+**Priority:** High · **Size:** M · **Type:** Bug / Feature
+
+**As a** user, **I want** every import to be all-or-nothing, previewable, and lifecycle-correct, **so that** moving data between devices never leaves half-imported or mislabeled games.
+
+**Acceptance criteria**
+- **Season import produces Finished games** — imported games appear in the completed-matches list with W/L badges, not as "● RESUME" (today every imported game defaults to InProgress).
+- Season export/import reaches **parity with the game bundle (US-14)**: game `Status`/clock/period fields and `LinkedEventId` assist/rebound links survive the round-trip.
+- **Imports are transactional** (game bundle and season): any failure rolls back everything — no partial teams/players/games left behind.
+- Before committing, an import shows a **preview/confirmation**: "This will add 1 game, create 2 teams and 14 players (3 matched). Continue?"
+- **Duplicate detection**: re-importing the same game file is detected (stable per-game GUID stamped at creation/export) and offers "skip" or "import as copy".
+- Existing valid export files (both formats) still import correctly (versioned DTOs — bump version, accept v1).
+
+**Technical notes**
+The season DTOs predate US-10/US-14: `ImportSeasonAsync` creates `Game` without `Status` (model default = InProgress) and `StatEventExport` lacks `LinkedEventId` — port the US-14 bundle techniques (LocalId link remapping, lifecycle fields) into the season path, or rebuild season export as a list of game bundles + season/team metadata. Wrap `ImportGameAsync`/`ImportSeasonAsync` bodies in `Database.BeginTransactionAsync()` (pattern already in `SeasonRepository.DeleteAsync`). Preview: deserialize + resolve matches first (dry run of `ResolveTeamAsync` without writes), show counts via `DisplayAlert`, then commit. Duplicate GUID: add nullable `ExportGuid` column on `Games` via the `EnsureGameColumns` additive-migration pattern; stamp at game creation; carry in both bundle formats.
+
+---
+
+## US-20 — Per-quarter team fouls, bonus & foul-trouble warnings 🚨
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** scorer, **I want** team fouls per period with a bonus indicator and player foul-trouble warnings, **so that** I see the game the way a coach reads it.
+
+**Acceptance criteria**
+- The scoreboard shows **team fouls for the current period** (resetting each quarter/OT), not a game-long total.
+- At **5 team fouls** in a period, a clear **BONUS** indicator appears for the opposing team (FIBA rule).
+- A player reaching **4 personal fouls** is visually flagged (e.g. amber) on their roster card; at **5 fouls** they're flagged red as fouled out and the substitution drawer nudges a replacement.
+- Undo/corrections keep the per-period counts correct (foul counters derive from events, not incremented shadows).
+- Resume (US-10) restores the correct per-period team-foul state.
+- Box score and PDF still show game-total fouls per player (unchanged).
+
+**Technical notes**
+`HomeFouls`/`AwayFouls` in `GameScoringViewModel` are game-long running counters. Replace with derived per-period counts: `events.Count(e => foul && e.Quarter == Quarter)` recomputed on record/undo/correction/period-change (cheap — events are in memory during a game). Player flags: per-player foul counts already computed in `RefreshCorrectionsAsync` — surface them on the roster cards (`PlayerFoulRow`-style binding or highlight pass like `UpdatePlayerHighlighting`). Technical fouls count toward player foul-out per FIBA; keep that in the count.
+
+---
+
+## US-21 — Configurable game format (period length & count) ⚙️
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** scorer, **I want** to set the period length (and number of periods) per season, **so that** the app matches my league — U14 plays 8-minute quarters, FIBA seniors 10.
+
+**Acceptance criteria**
+- A season has a **game format setting**: minutes per period (default 10) and periods (default 4); OT length (default 5) optionally configurable.
+- New games in that season start the clock at the configured length; **Q+ resets to the right value** for regulation vs OT.
+- **Minutes / +/- math uses the configured lengths** — no hardcoded 600s anywhere.
+- Existing games keep working (their format is derivable or stored per game so a mid-season format change doesn't corrupt history).
+- Resume clamps the restored clock against the correct period length.
+
+**Technical notes**
+Add `PeriodLengthMinutes`, `PeriodCount`, `OvertimeLengthMinutes` to `Season` (additive `ALTER TABLE` via the `EnsureGameColumns` pattern, defaults 10/4/5). Store a **copy on `Game`** at creation so history is immune to later season edits. Replace the four hardcoded sites: `GameScoringViewModel` (`QuarterLengthSeconds`, `OvertimeLengthSeconds`, `PeriodLengthSeconds`, initial `GameClock`), `GameStatsService.ToAbsoluteSeconds`/`ParseClockSeconds` clamp, `PdfReportService` equivalents, `GameEditViewModel` "0:00" additions (unaffected). Depends on US-18's shared time-mapping helper — do US-18 first.
+
+---
+
+## US-22 — Linked possession flows: foul→FT, and-1, steal→turnover, block→miss 🔗
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** scorer, **I want** the app to chain the events that belong together, **so that** a foul flows into free throws and a steal auto-records the opponent's turnover — fewer taps, cleaner data.
+
+**Acceptance criteria**
+- After recording a **personal foul**, an optional follow-up asks **"fouled who?"** (opposing on-court players + SKIP); choosing a player offers a **free-throw sequence** (1, 2 or 3 attempts) recorded to that player, each linked to the foul.
+- After a **made shot**, the assist prompt gains an **"+1 (fouled)"** path: records the foul on a chosen defender and flows into one linked FT for the shooter.
+- After a **steal**, an optional prompt **"turnover by?"** (opposing on-court players + SKIP) records the linked turnover.
+- After a **block**, the blocked player's **missed shot** can be recorded in one flow (block links to the miss).
+- Every follow-up stays **optional** — SKIP everywhere, never more than one extra tap to dismiss.
+- Undo of a chained sequence walks back one link at a time (newest first), consistent with today's behaviour.
+
+**Technical notes**
+The `LinkedEventId` field and the US-13 two-team follow-up prompt are the building blocks — extend `SetFollowUp`/`HandleFollowUpAsync` from two types ("assist"/"rebound") to a small state machine (enum + optional next-step). FT sequence UI: reuse the existing FT made/miss buttons in a modal strip ("FT 1 of 2"). Keep each stored event a plain `StatEvent` with `LinkedEventId` pointing at the trigger, so box score/undo/US-14 export all work unchanged. Scope carefully — this is the biggest UX change of the batch; consider shipping foul→FT first and steal/block chains as a follow-up PR.
+
+---
+
+## US-23 — Zone-based shot analytics & heat map 🗺️
+**Priority:** High · **Size:** L · **Type:** Feature
+
+**As a** coach, **I want** FG% by court zone with a visual heat map, **so that** I can see where a player or team actually scores from — the core scouting question.
+
+**Acceptance criteria**
+- The court is divided into standard zones (paint, left/right mid-range, top-of-key, left/right corner 3, left/right wing 3, center 3).
+- Player season view and game box-score view offer a **zone chart**: per zone, makes/attempts and FG%, color-graded (cold → hot).
+- Toggle between **player / team / opponent** scope, and filter by **period** within a game.
+- Zone stats match the raw dot chart exactly (same underlying events; no drift).
+- The zone chart exports into the **player/season PDF**.
+
+**Technical notes**
+All shots already store normalized `CourtX/CourtY` — this is pure aggregation + rendering. Add a `CourtZones` helper in `BasketballScout.Services` mapping (X, Y) → zone id (reuse the 3PT-arc math from `GameScoringPage.OnCourtTapped` — extract it into Core/Services so the live 2/3 suggestion and zone mapping can never disagree). Rendering: a `ZoneChartView` sibling of `ShotChartView` drawing tinted zone polygons + labels; PDF gets a mirrored drawing routine in `PdfReportService` (court-drawing primitives already exist there). No schema impact.
+
+---
+
+## US-24 — Opponent tendency scout report 🕵️
+**Priority:** Medium · **Size:** L · **Type:** Feature
+
+**As a** coach preparing for a rematch, **I want** a one-page scout sheet per opponent, **so that** I walk into the game knowing their top scorers and tendencies.
+
+**Acceptance criteria**
+- Per opponent team (within a season): **top scorers** (PPG, shooting splits), **zone preferences** (from US-23), rebounding/turnover profile, and per-game team scoring.
+- A **"Scout Report" PDF** (one page) exportable from the team's page, styled like the existing reports.
+- Data covers **all games against that opponent** in the season; shows game count so small samples are obvious.
+- Works offline from recorded events only (no manual data entry).
+
+**Technical notes**
+Aggregation is a variant of `GetSeasonStatsAsync` filtered to games involving one team; zone data comes from US-23's `CourtZones` helper (hard dependency). New `ScoutReportService` method in `PdfReportService` or alongside it; entry point on `TeamDetailPage` ("Scout Report" button, visible when the team has finished games). Purely derived — no schema impact.
+
+---
+
+## US-25 — Season standings & scoring-run detection 📊
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** user, **I want** a standings table and visible scoring runs, **so that** the season page tells the story at a glance.
+
+**Acceptance criteria**
+- The season page gains a **standings table**: per team W-L, points for/against, point differential — computed from Finished games only.
+- During live scoring and in the play-by-play log, an unanswered **scoring run ≥ 8-0** is flagged (e.g. "12-0 run"); the PDF game-flow chart annotates the biggest run of each half.
+- Ties and forfeits don't break the table (ties shown as T).
+- Standings respect the team filter UX already on the season stats page.
+
+**Technical notes**
+Standings: derive from `GetSeasonGameSummariesAsync` (already computes final scores + status) — group by team, no new queries. Run detection: single pass over scoring events ordered by the US-18 shared time helper, tracking consecutive unanswered points; expose as `List<ScoringRun>` from `GameStatsService` for the live log, and annotate `DrawGameFlowChart` in the PDF. Do after US-18 so the time mapping is OT-safe.
+
+---
+
+## US-26 — One-tap backup & restore 💾
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** user whose entire season lives on one device, **I want** a one-tap full backup and a restore path, **so that** a lost or broken iPad doesn't mean a lost season.
+
+**Acceptance criteria**
+- Settings/About offers **"Back up all data"**: produces a single file (shareable via the native share sheet) containing every season, team, player, game and stat event.
+- **"Restore from backup"** imports such a file onto a fresh install, reproducing everything (verified: match lists, box scores, shot charts, PDFs identical).
+- Restore onto a device **with existing data** asks explicitly: merge-as-new-seasons or cancel (never silently overwrites).
+- The backup notes app/schema version and restore fails gracefully on an incompatible file.
+- A reminder nudge (subtle, e.g. on the seasons page) if no backup was made in 30+ days.
+
+**Technical notes**
+Two viable routes: (a) copy the SQLite file itself (`basketballscout.db` in `FileSystem.AppDataDirectory`) — trivial export, but restore must close/reopen the connection and trust schema patching; (b) full-DB JSON bundle reusing US-14/US-19 serialization — slower but version-tolerant and merge-friendly. Recommend (b), as US-19 already brings season-bundle parity: a backup = all seasons as bundles + a manifest. Track `LastBackupDate` in `Preferences`.
+
+---
+
+## US-27 — Phone-portrait scoring layout 📱
+**Priority:** Medium · **Size:** L · **Type:** Feature
+
+**As a** scorer using a phone, **I want** a portrait scoring layout, **so that** I can track a game one-handed when I don't have the iPad.
+
+**Acceptance criteria**
+- On phone (or narrow portrait window), the scoring screen switches to the V2 design: scoreboard top, active-five player bar below it, half court center, quick-stat bar bottom.
+- **Team switching** by tapping the score area (both rosters can't fit side-by-side).
+- All flows work identically: court-first scoring, follow-ups (US-13 groups), corrections, substitutions, undo, leave/finish.
+- The existing 3-column layout remains for tablet/landscape; both bind to the **same `GameScoringViewModel`** (no logic duplication).
+- No regression on iPad.
+
+**Technical notes**
+This is the CLAUDE.md V2/V3 split that was never built — today's single `GameScoringPage` is the 3-column tablet shape with 140px side columns (unusable on a phone). Add `GameScoringPortraitPage.xaml` sharing the ViewModel; route by `DeviceInfo.Idiom` (and/or width via `OnSizeAllocated`) in the navigation call. The VM already exposes everything needed (`SwitchTeam`, `CurrentOnCourt`, `IsHomeSelected`). Big XAML job, near-zero VM work; extract shared templates (player card, stat bar, follow-up popup) into reusable `ContentView`s first so the two pages don't drift.
+
+---
+
+## US-28 — Edit or delete any event from the play-by-play log ✏️
+**Priority:** Medium · **Size:** S · **Type:** Feature
+
+**As a** scorer, **I want** to act directly on a play-log entry, **so that** I can fix a mistake I spot in the log without hunting through the corrections drawer.
+
+**Acceptance criteria**
+- Tapping/long-pressing a play-log row offers **Delete** (with the same reversal semantics as the corrections drawer) and, for shots, **toggle made/miss**.
+- Works for any event in the game, not just the 25 most recent.
+- Score, fouls, shot dots and the log itself update immediately; linked-event handling follows US-18's rules.
+- Sub log lines are view-only (subs are corrected via the substitution drawer).
+
+**Technical notes**
+`PlayLogEntry` doesn't carry the event id — add `EventId` (populated in `AddLog` calls and `RebuildFromEvents`). Reuse `ApplyReversal` + `DeleteEventAsync` from the corrections drawer (US-5); made/miss toggle = update `ShotResult` + score/dot adjustments. Mostly wiring; the reversal logic already exists.
+
+---
+
+## US-29 — DbContext lifetime hardening 🧱
+**Priority:** Medium · **Size:** M · **Type:** Tech debt
+
+**As a** developer, **I want** short-lived database contexts, **so that** the app can't hit "second operation on this context" races or unbounded change-tracker growth in long sessions.
+
+**Acceptance criteria**
+- No shared app-lifetime `DbContext`: concurrent page loads (e.g. fast navigation during `OnAppearing` reloads) can no longer throw `InvalidOperationException`.
+- Memory stays flat across a long session (scoring several games without restart).
+- All existing repository behaviour is preserved (verified by exercising every page).
+
+**Technical notes**
+MAUI resolves scoped services from the root provider, so today's `AddDbContext` yields one effectively-singleton `ScoutDbContext` shared by every repository and ViewModel. Switch to `AddDbContextFactory<ScoutDbContext>` and have repositories create a context per operation (`await using var db = await _factory.CreateDbContextAsync()`), or make repositories transient with per-call contexts. Watch the two multi-step flows that must share one context/transaction (`SeasonRepository.DeleteAsync`, `GameRepository.DeleteAsync`, US-19 imports) — give those explicit factory-created contexts with transactions. Read paths become `AsNoTracking` for free wins. Do this **before** US-22/US-23 add more concurrent readers.
+
+---
+
+## US-30 — Readability & tap-target accessibility pass 👓
+**Priority:** Low · **Size:** S · **Type:** UI
+
+**As a** scorer in a noisy gym (often at a distance, often in a hurry), **I want** a text-size setting and generous contrast, **so that** the app stays readable courtside.
+
+**Acceptance criteria**
+- A simple **text size** setting (Normal / Large) scales the scoring screen's stat labels, play log and roster names.
+- Contrast audit: the dim grays (`#555` on `#0a0a0a` etc.) are lifted where they fall below WCAG AA for essential info (scores, clock, fouls).
+- Respects the OS dynamic-font setting where feasible (MAUI `FontAutoScalingEnabled`).
+- No layout overflow in either orientation at the Large setting.
+- (Localization is explicitly **out of scope**.)
+
+**Technical notes**
+Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handful of hardcoded values on `GameScoringPage`/`SeasonStatsPage`, backed by a `Preferences`-stored setting on a new Settings section (About page already exists as a host). Verify `MinimumHeightRequest=44+` on all interactive elements (US-3 covered most).
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -298,17 +542,50 @@ Root cause: `GameScoringPage` sets `Shell.NavBarIsVisible="False"`, so there is 
 - ✅ **US-11** — Edit recorded stats of a finished game (PR #29, merged).
 - ✅ **US-12** — Delete games & seasons with confirmation (PR #30, merged).
 - ✅ **US-13** — Tell home from away in the rebound prompt (PR #31, merged).
-- 🔄 **US-14** — Import & export a single game (implemented; PR open).
-- 🔄 **US-15** — Shot chart shows only the selected player (implemented; PR open).
+- ✅ **US-14** — Import & export a single game (PR #33, merged).
+- ✅ **US-15** — Shot chart shows only the selected player (PR #32, merged).
 - ✅ **US-16** — Explicit "leave game" button on the scoring screen (PR #31, merged).
+- 📋 **US-17** — Fix crashes & leaks (planned).
+- 📋 **US-18** — Fix stat correctness: OT minutes, averages, undo desync (planned).
+- 📋 **US-19** — Import/export integrity: season parity, transactions, preview (planned).
+- 📋 **US-20** — Per-quarter team fouls, bonus & foul-trouble warnings (planned).
+- 📋 **US-21** — Configurable game format (planned).
+- 📋 **US-22** — Linked possession flows (planned).
+- 📋 **US-23** — Zone-based shot analytics & heat map (planned).
+- 📋 **US-24** — Opponent tendency scout report (planned).
+- 📋 **US-25** — Season standings & scoring-run detection (planned).
+- 📋 **US-26** — One-tap backup & restore (planned).
+- 📋 **US-27** — Phone-portrait scoring layout (planned).
+- 📋 **US-28** — Edit/delete any event from the play-by-play log (planned).
+- 📋 **US-29** — DbContext lifetime hardening (planned).
+- 📋 **US-30** — Readability & tap-target accessibility pass (planned).
 
 ## Suggested implementation order (remaining)
 
-1. **US-13** — rebound-prompt team distinction. Smallest, highest-value courtside fix; pure presentation, no schema or data risk. ✅ *done*
-2. **US-16** — leave-game button. Tiny UX fix that removes a real dead-end on iPad; reuses US-10's save/resume plumbing. ✅ *done*
-3. **US-15** — selected-player shot chart. Presentation-only; tiny `ShotDot.PlayerId` addition, no migration. ✅ *done*
-4. **US-14** — game import/export. Largest: stands up the `ImportExportService` and the FK-remapping logic; worth doing once the quick UX wins are in. ✅ *done*
+**Phase 1 — hardening (fix before the next real game):**
+1. **US-17** — crashes & leaks. The player-delete crash is user-facing today; the timer leak hits every hardware-back exit.
+2. **US-18** — stat correctness. OT minutes, Finished-only averages, undo desync, linked-event phantoms. Also creates the shared period-time helper US-21/US-25 build on.
+3. **US-19** — import/export integrity. Season-import lifecycle bug is a data-corruption class; transactions + preview + duplicate GUID round it out.
+
+**Phase 2 — courtside trust:**
+4. **US-20** — per-quarter team fouls, bonus & foul trouble. Highest-value scoring-screen upgrade.
+5. **US-21** — configurable game format. Depends on US-18's time helper.
+6. **US-26** — backup & restore. Depends on US-19's serialization parity.
+
+**Phase 3 — the scout differentiators:**
+7. **US-29** — DbContext hardening (do before adding more concurrent readers).
+8. **US-23** — zone analytics (foundation for US-24).
+9. **US-28** — play-log editing (small, high convenience).
+10. **US-25** — standings & runs.
+11. **US-24** — opponent scout report (depends on US-23).
+
+**Phase 4 — reach:**
+12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first).
+13. **US-27** — phone-portrait layout.
+14. **US-30** — readability pass.
 
 **Dependencies / sequencing rationale**
-- US-13 and US-15 are independent, low-risk UI changes touching only `GameScoringViewModel` / `GameScoringPage` — ship them first to improve live scouting immediately.
-- US-14 is self-contained but the heaviest: the self-contained-bundle format and the `LinkedEventId`/`PlayerId`/team FK remapping on import are the real work, and it introduces the import/export plumbing the rest of Sprint 4 (season export, CSV) will reuse.
+- US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
+- US-19 before US-26: backup format reuses the season-bundle parity work.
+- US-23 before US-24: the scout report is built on zone aggregation.
+- US-29 before US-22/US-23: those features add concurrent data readers; fix the context lifetime first.
