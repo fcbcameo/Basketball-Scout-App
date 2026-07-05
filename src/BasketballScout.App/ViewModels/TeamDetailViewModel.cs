@@ -12,6 +12,7 @@ public partial class TeamDetailViewModel : ObservableObject
 {
     private readonly ITeamRepository _teamRepository;
     private readonly IPlayerRepository _playerRepository;
+    private readonly IStatEventRepository _statEventRepository;
 
     [ObservableProperty]
     public partial int TeamId { get; set; }
@@ -40,10 +41,14 @@ public partial class TeamDetailViewModel : ObservableObject
         "#34d399", "#fb923c", "#818cf8", "#a78bfa"
     };
 
-    public TeamDetailViewModel(ITeamRepository teamRepository, IPlayerRepository playerRepository)
+    public TeamDetailViewModel(
+        ITeamRepository teamRepository,
+        IPlayerRepository playerRepository,
+        IStatEventRepository statEventRepository)
     {
         _teamRepository = teamRepository;
         _playerRepository = playerRepository;
+        _statEventRepository = statEventRepository;
     }
 
     partial void OnTeamIdChanged(int value)
@@ -158,6 +163,25 @@ public partial class TeamDetailViewModel : ObservableObject
     [RelayCommand]
     private async Task DeletePlayerAsync(Player player)
     {
+        // A player who has appeared in any game has StatEvents referencing them, and the
+        // StatEvent→Player FK is Restrict — a hard delete would throw an unhandled
+        // DbUpdateException and crash. Offer deactivation instead so game history stays
+        // intact; inactive players drop out of the lineup pickers (which filter IsActive).
+        var history = await _statEventRepository.GetByPlayerIdAsync(player.Id);
+        if (history.Count > 0)
+        {
+            bool markInactive = await Shell.Current.DisplayAlertAsync(
+                "Player Has Game History",
+                $"#{player.JerseyNumber} {player.Name} has recorded stats, so deleting them would lose game history.\n\nMark them inactive instead? They stay in past box scores but won't appear when picking a lineup.",
+                "Mark Inactive", "Cancel");
+            if (!markInactive) return;
+
+            player.IsActive = false;
+            await _playerRepository.UpdateAsync(player);
+            await RefreshPlayersAsync();
+            return;
+        }
+
         bool confirm = await Shell.Current.DisplayAlertAsync(
             "Delete Player",
             $"Delete #{player.JerseyNumber} {player.Name}?",

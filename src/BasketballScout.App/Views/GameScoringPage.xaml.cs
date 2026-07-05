@@ -34,8 +34,9 @@ public partial class GameScoringPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        // Persist the exact clock/period so the game can be resumed where it was left.
-        _ = _vm.SaveStateAsync();
+        // Stop the clock (so hardware/gesture back can't leave it ticking on an
+        // abandoned page) and persist the exact clock/period for resume.
+        _ = _vm.OnPageDisappearingAsync();
     }
 
     private void OnActionUndone(string message) => ShowToast(message);

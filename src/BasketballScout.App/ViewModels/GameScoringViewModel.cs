@@ -571,7 +571,7 @@ public partial class GameScoringViewModel : ObservableObject
         if (SelectedPlayer is null) return;
         bool isHome = IsHomeSelected;
 
-        var (statType, label) = statId switch
+        (StatType Type, string Label)? mapped = statId switch
         {
             "ast" => (StatType.Assist, "Assist"),
             "stl" => (StatType.Steal, "Steal"),
@@ -581,8 +581,16 @@ public partial class GameScoringViewModel : ObservableObject
             "dreb" => (StatType.DefensiveRebound, "DEF Rebound"),
             "pf" => (StatType.PersonalFoul, "Personal Foul"),
             "tech" => (StatType.TechnicalFoul, "Technical Foul"),
-            _ => (StatType.Turnover, statId)
+            _ => null
         };
+
+        // Ignore an unrecognized id rather than silently logging a Turnover.
+        if (mapped is null)
+        {
+            System.Diagnostics.Debug.WriteLine($"Ignoring unknown quick-stat id '{statId}'.");
+            return;
+        }
+        var (statType, label) = mapped.Value;
 
         var ev = new StatEvent
         {
@@ -901,7 +909,25 @@ public partial class GameScoringViewModel : ObservableObject
         }
         _clockSeconds--;
         GameClock = FormatClock(_clockSeconds);
-        if (_clockSeconds <= 0) StopClock();
+        if (_clockSeconds <= 0)
+        {
+            // Period expired while running — persist so a resume shows 0:00, not the
+            // last saved value (matches a manual pause).
+            StopClock();
+            _ = SaveStateAsync();
+        }
+    }
+
+    /// <summary>
+    /// Called when the scoring page disappears — including Android hardware/gesture back,
+    /// which (unlike the LEAVE/END buttons) does not otherwise stop the clock. Stops the
+    /// timer so an abandoned ViewModel can't keep ticking (battery + leak) and persists
+    /// the exact state for resume.
+    /// </summary>
+    public async Task OnPageDisappearingAsync()
+    {
+        StopClock();
+        await SaveStateAsync();
     }
 
     private static string FormatClock(int seconds) =>

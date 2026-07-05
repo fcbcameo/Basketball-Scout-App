@@ -159,7 +159,7 @@ public partial class SeasonDetailViewModel : ObservableObject
         try
         {
             var json = await _importExportService.ExportSeasonAsync(SeasonId);
-            var fileName = $"BasketballScout_{Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.json";
+            var fileName = $"BasketballScout_{MakeFileSafe(Name.Replace(" ", "_"))}_{DateTime.Now:yyyyMMdd}.json";
             var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(filePath, json);
 
@@ -173,6 +173,15 @@ public partial class SeasonDetailViewModel : ObservableObject
         {
             await Shell.Current.DisplayAlertAsync("Error", $"Export failed: {ex.Message}", "OK");
         }
+    }
+
+    /// <summary>Strips characters that are invalid in a file name (e.g. a season named
+    /// "2025/26"), so the export never fails building its path.</summary>
+    private static string MakeFileSafe(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
     }
 
     [RelayCommand]

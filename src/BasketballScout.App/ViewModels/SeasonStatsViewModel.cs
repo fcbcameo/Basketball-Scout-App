@@ -205,7 +205,14 @@ public partial class SeasonStatsViewModel : ObservableObject
         {
             var pick = await FilePicker.Default.PickAsync(new PickOptions
             {
-                PickerTitle = "Select a game file (.json)"
+                PickerTitle = "Select a game file (.json)",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.Android, new[] { "application/json" } },
+                    { DevicePlatform.iOS, new[] { "public.json" } },
+                    { DevicePlatform.WinUI, new[] { ".json" } },
+                    { DevicePlatform.macOS, new[] { "public.json" } },
+                })
             });
             if (pick is null) return; // cancelled
 
