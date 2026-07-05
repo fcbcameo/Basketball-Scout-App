@@ -38,6 +38,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
         builder.Services.AddScoped<IGameRepository, GameRepository>();
         builder.Services.AddScoped<IStatEventRepository, StatEventRepository>();
+        builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Services
         builder.Services.AddScoped<GameStatsService>();
@@ -125,5 +126,6 @@ public static class MauiProgram
         AddColumn("Status", "Status INTEGER NOT NULL DEFAULT 1");                       // legacy games → Finished
         AddColumn("ClockSecondsRemaining", "ClockSecondsRemaining INTEGER NOT NULL DEFAULT 600");
         AddColumn("CurrentPeriod", "CurrentPeriod INTEGER NOT NULL DEFAULT 1");
+        AddColumn("ExportGuid", "ExportGuid TEXT NULL");                                 // US-19 duplicate detection
     }
 }

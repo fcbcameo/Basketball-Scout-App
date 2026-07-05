@@ -149,7 +149,8 @@ public partial class GameSetupViewModel : ObservableObject
             HomeTeamId = SelectedHomeTeam.Id,
             AwayTeamId = SelectedAwayTeam.Id,
             GameDate = GameDate,
-            Location = Location.Trim()
+            Location = Location.Trim(),
+            ExportGuid = Guid.NewGuid().ToString() // stable identity for export/duplicate detection (US-19)
         };
 
         var created = await _gameRepository.AddAsync(game);

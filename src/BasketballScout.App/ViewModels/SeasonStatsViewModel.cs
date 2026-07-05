@@ -217,6 +217,21 @@ public partial class SeasonStatsViewModel : ObservableObject
             if (pick is null) return; // cancelled
 
             var json = await File.ReadAllTextAsync(pick.FullPath);
+
+            // Preview before committing, and flag a re-import of the same game.
+            var preview = await _importExportService.AnalyzeGameImportAsync(json, SeasonId);
+            string dupLine = preview.IsDuplicate
+                ? "\n\n⚠ This game was already imported into this season."
+                : string.Empty;
+            bool proceed = await Shell.Current.DisplayAlertAsync(
+                preview.IsDuplicate ? "Already Imported" : "Import Game?",
+                $"This will add 1 game to this season.\n\n" +
+                $"Teams: {preview.TeamsMatched} matched, {preview.TeamsToCreate} new\n" +
+                $"Players: {preview.PlayersMatched} matched, {preview.PlayersToCreate} new\n" +
+                $"Stat events: {preview.EventCount}{dupLine}",
+                preview.IsDuplicate ? "Import Anyway" : "Import", "Cancel");
+            if (!proceed) return;
+
             var r = await _importExportService.ImportGameAsync(json, SeasonId);
 
             await ReloadAsync();
