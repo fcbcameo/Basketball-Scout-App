@@ -547,7 +547,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - ✅ **US-16** — Explicit "leave game" button on the scoring screen (PR #31, merged).
 - 🔄 **US-17** — Fix crashes & leaks (implemented; PR open).
 - 🔄 **US-18** — Fix stat correctness: OT minutes, averages, undo desync (implemented; PR open).
-- 📋 **US-19** — Import/export integrity: season parity, transactions, preview (planned).
+- 🔄 **US-19** — Import/export integrity: season parity, transactions, preview (implemented; PR open).
 - 📋 **US-20** — Per-quarter team fouls, bonus & foul-trouble warnings (planned).
 - 📋 **US-21** — Configurable game format (planned).
 - 📋 **US-22** — Linked possession flows (planned).
@@ -565,7 +565,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 **Phase 1 — hardening (fix before the next real game):**
 1. **US-17** — crashes & leaks. The player-delete crash is user-facing today; the timer leak hits every hardware-back exit. ✅ *done*
 2. **US-18** — stat correctness. OT minutes, Finished-only averages, undo desync, linked-event phantoms. Also creates the shared period-time helper US-21/US-25 build on. ✅ *done*
-3. **US-19** — import/export integrity. Season-import lifecycle bug is a data-corruption class; transactions + preview + duplicate GUID round it out.
+3. **US-19** — import/export integrity. Season-import lifecycle bug is a data-corruption class; transactions + preview + duplicate GUID round it out. ✅ *done*
 
 **Phase 2 — courtside trust:**
 4. **US-20** — per-quarter team fouls, bonus & foul trouble. Highest-value scoring-screen upgrade.

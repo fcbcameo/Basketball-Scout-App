@@ -19,6 +19,10 @@ public class Game
     /// <summary>Current period when last left: 1–4 regulation, 5+ overtime.</summary>
     public int CurrentPeriod { get; set; } = 1;
 
+    /// <summary>Stable identity stamped at creation (US-19). Travels in export bundles so a
+    /// re-import of the same game can be detected as a duplicate. Null for legacy games.</summary>
+    public string? ExportGuid { get; set; }
+
     public int SeasonId { get; set; }
     public Season Season { get; set; } = null!;
 

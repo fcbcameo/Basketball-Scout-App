@@ -203,6 +203,18 @@ public partial class SeasonDetailViewModel : ObservableObject
             if (result is null) return;
 
             var json = await File.ReadAllTextAsync(result.FullPath);
+
+            // Preview before committing (season import creates a fresh season copy).
+            var preview = ImportExportService.AnalyzeSeasonImport(json);
+            bool proceed = await Shell.Current.DisplayAlertAsync(
+                "Import Season?",
+                $"This will create a new season \"{preview.SeasonName} (imported)\" with:\n\n" +
+                $"Teams: {preview.TeamCount}\n" +
+                $"Players: {preview.PlayerCount}\n" +
+                $"Games: {preview.GameCount}",
+                "Import", "Cancel");
+            if (!proceed) return;
+
             var newSeasonId = await _importExportService.ImportSeasonAsync(json);
 
             await Shell.Current.DisplayAlertAsync("Imported",
