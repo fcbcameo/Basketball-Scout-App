@@ -366,7 +366,8 @@ public partial class GameScoringViewModel : ObservableObject
                 Quarter = e.Quarter,
                 GameClock = e.GameClock,
                 IsHome = isHome,
-                Timestamp = e.Timestamp
+                Timestamp = e.Timestamp,
+                EventId = e.Id
             });
         }
     }
@@ -437,12 +438,12 @@ public partial class GameScoringViewModel : ObservableObject
         if (confirmation.IsMade)
         {
             if (isHome) HomeScore += pts; else AwayScore += pts;
-            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Made", isHome);
+            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Made", isHome, statEvent.Id);
             SetFollowUp("assist", statEvent.Id);
         }
         else
         {
-            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Miss", isHome);
+            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Miss", isHome, statEvent.Id);
             SetFollowUp("rebound", statEvent.Id);
         }
 
@@ -520,7 +521,7 @@ public partial class GameScoringViewModel : ObservableObject
             await _statEventRepository.AddAsync(ev);
 
             bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
-            AddLog($"  > #{player.JerseyNumber} {player.Name} — {(isAssist ? "Assist" : "Rebound")}", isHome);
+            AddLog($"  > #{player.JerseyNumber} {player.Name} — {(isAssist ? "Assist" : "Rebound")}", isHome, ev.Id);
         }
 
         ClearFollowUp();
@@ -561,7 +562,7 @@ public partial class GameScoringViewModel : ObservableObject
             if (isHome) HomeScore += 1; else AwayScore += 1;
         }
 
-        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — FT {(made ? "Made" : "Miss")}", isHome);
+        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — FT {(made ? "Made" : "Miss")}", isHome, ev.Id);
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
@@ -608,7 +609,7 @@ public partial class GameScoringViewModel : ObservableObject
             if (isHome) HomeFouls++; else AwayFouls++;
         }
 
-        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome);
+        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome, ev.Id);
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
@@ -626,6 +627,7 @@ public partial class GameScoringViewModel : ObservableObject
         var last = events
             .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
             .OrderByDescending(e => e.Timestamp)
+            .ThenByDescending(e => e.Id) // deterministic tie-break under rapid entry
             .FirstOrDefault();
 
         if (last is null)
@@ -639,8 +641,10 @@ public partial class GameScoringViewModel : ObservableObject
 
         await _statEventRepository.DeleteAsync(last.Id);
 
-        if (PlayLog.Count > 0)
-            PlayLog.RemoveAt(0);
+        // Remove exactly this event's log row (not blindly the newest — a substitution
+        // may sit on top and must stay).
+        var row = PlayLog.FirstOrDefault(p => p.EventId == last.Id);
+        if (row is not null) PlayLog.Remove(row);
 
         ClearFollowUp();
         PendingShot = null;
@@ -736,6 +740,14 @@ public partial class GameScoringViewModel : ObservableObject
         var events = await _statEventRepository.GetByGameIdAsync(GameId);
         var e = events.FirstOrDefault(x => x.Id == entry.EventId);
         if (e is null) return;
+
+        // Remove any follow-up linked to this event first (an assist off a made shot, a
+        // rebound off a miss), so deleting the shot never leaves a phantom assist behind.
+        foreach (var dependent in events.Where(x => x.LinkedEventId == e.Id))
+        {
+            ApplyReversal(dependent);
+            await _statEventRepository.DeleteAsync(dependent.Id);
+        }
 
         ApplyReversal(e);
         await _statEventRepository.DeleteAsync(e.Id);
@@ -983,7 +995,7 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Helpers ──
-    private void AddLog(string message, bool isHome)
+    private void AddLog(string message, bool isHome, int? eventId = null)
     {
         PlayLog.Insert(0, new PlayLogEntry
         {
@@ -991,7 +1003,8 @@ public partial class GameScoringViewModel : ObservableObject
             Quarter = Quarter,
             GameClock = GameClock,
             IsHome = isHome,
-            Timestamp = DateTime.UtcNow
+            Timestamp = DateTime.UtcNow,
+            EventId = eventId
         });
 
         if (PlayLog.Count > 100)
@@ -1076,6 +1089,9 @@ public class PlayLogEntry
     public string GameClock { get; set; } = string.Empty;
     public bool IsHome { get; set; }
     public DateTime Timestamp { get; set; }
+    /// <summary>The stat event this row represents, so undo can remove exactly this row
+    /// (not blindly the newest, which may be a substitution). Null for non-event lines.</summary>
+    public int? EventId { get; set; }
 }
 
 public class SubstitutionRequest
