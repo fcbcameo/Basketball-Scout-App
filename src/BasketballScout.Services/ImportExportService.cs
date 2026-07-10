@@ -15,6 +15,8 @@ public class ImportExportService
     private readonly IStatEventRepository _statEventRepository;
     private readonly IUnitOfWork _unitOfWork;
 
+    private const int BackupSchemaVersion = 1; // full-backup file format (US-26)
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -38,10 +40,15 @@ public class ImportExportService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<string> ExportSeasonAsync(int seasonId)
+    public async Task<string> ExportSeasonAsync(int seasonId) =>
+        JsonSerializer.Serialize(await BuildSeasonExportAsync(seasonId), JsonOptions);
+
+    /// <summary>Builds the serializable graph for one season (teams, rosters, games with
+    /// lifecycle + event links). Shared by single-season export and full backup (US-26).</summary>
+    private async Task<SeasonExport> BuildSeasonExportAsync(int seasonId)
     {
-        var season = await _seasonRepository.GetByIdAsync(seasonId);
-        if (season is null) throw new InvalidOperationException("Season not found");
+        var season = await _seasonRepository.GetByIdAsync(seasonId)
+            ?? throw new InvalidOperationException("Season not found");
 
         var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
@@ -116,7 +123,7 @@ public class ImportExportService
             });
         }
 
-        var export = new SeasonExport
+        return new SeasonExport
         {
             Version = 2, // v2 adds game lifecycle fields, ExportGuid and event links
             ExportDate = DateTime.UtcNow,
@@ -124,35 +131,47 @@ public class ImportExportService
             {
                 Name = season.Name,
                 StartDate = season.StartDate,
-                EndDate = season.EndDate
+                EndDate = season.EndDate,
+                PeriodLengthMinutes = season.PeriodLengthMinutes,
+                PeriodCount = season.PeriodCount,
+                OvertimeLengthMinutes = season.OvertimeLengthMinutes
             },
             Teams = exportTeams,
             Games = exportGames
         };
-
-        return JsonSerializer.Serialize(export, JsonOptions);
     }
 
     public async Task<int> ImportSeasonAsync(string json)
     {
-        var import = JsonSerializer.Deserialize<SeasonExport>(json, JsonOptions)
-            ?? throw new InvalidOperationException("This file isn't a valid season export.");
-        if (import.Season is null)
-            throw new InvalidOperationException("This file isn't a valid season export.");
+        var import = ParseSeasonExport(json);
 
         int newSeasonId = 0;
-
         // All-or-nothing: a failure part-way rolls back the whole season (US-19).
         await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            var season = await _seasonRepository.AddAsync(new Season
-            {
-                Name = import.Season.Name + " (imported)",
-                StartDate = import.Season.StartDate,
-                EndDate = import.Season.EndDate
-            });
-            newSeasonId = season.Id;
+            newSeasonId = await ImportSeasonCoreAsync(import, markImported: true);
+        });
+        return newSeasonId;
+    }
 
+    /// <summary>Writes one season graph. Does NOT open its own transaction — the caller
+    /// owns it, so a full-backup restore (US-26) can import every season atomically. Returns
+    /// the new season id. <paramref name="markImported"/> appends " (imported)" to the name
+    /// (used for single-season sharing; a full restore keeps names as-is).</summary>
+    private async Task<int> ImportSeasonCoreAsync(SeasonExport import, bool markImported)
+    {
+        var season = await _seasonRepository.AddAsync(new Season
+        {
+            Name = markImported ? import.Season.Name + " (imported)" : import.Season.Name,
+            StartDate = import.Season.StartDate,
+            EndDate = import.Season.EndDate,
+            PeriodLengthMinutes = import.Season.PeriodLengthMinutes > 0 ? import.Season.PeriodLengthMinutes : 10,
+            PeriodCount = import.Season.PeriodCount > 0 ? import.Season.PeriodCount : 4,
+            OvertimeLengthMinutes = import.Season.OvertimeLengthMinutes > 0 ? import.Season.OvertimeLengthMinutes : 5
+        });
+        int newSeasonId = season.Id;
+
+        {
             // Create teams and players, tracking name → ID mappings
             var teamIdByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var playerIdByKey = new Dictionary<string, int>(); // "teamName|playerName|jersey" → id
@@ -244,9 +263,99 @@ public class ImportExportService
                     await _statEventRepository.UpdateAsync(ev);
                 }
             }
-        });
+        }
 
         return newSeasonId;
+    }
+
+    private static SeasonExport ParseSeasonExport(string json)
+    {
+        SeasonExport? import;
+        try
+        {
+            import = JsonSerializer.Deserialize<SeasonExport>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("This file isn't a valid season export.", ex);
+        }
+
+        if (import is null || import.Season is null)
+            throw new InvalidOperationException("This file isn't a valid season export.");
+        return import;
+    }
+
+    // ── Full backup / restore (US-26) ──
+
+    /// <summary>Serializes the entire database — every season with its teams, players, games
+    /// and stat events — into one backup file. <paramref name="appVersion"/> is recorded for
+    /// diagnostics; the schema version drives compatibility.</summary>
+    public async Task<string> ExportAllAsync(string appVersion = "")
+    {
+        var seasons = await _seasonRepository.GetAllAsync();
+        var backup = new BackupFile
+        {
+            Version = BackupSchemaVersion,
+            AppVersion = appVersion,
+            ExportDate = DateTime.UtcNow,
+            Seasons = new List<SeasonExport>()
+        };
+        foreach (var s in seasons)
+            backup.Seasons.Add(await BuildSeasonExportAsync(s.Id));
+        return JsonSerializer.Serialize(backup, JsonOptions);
+    }
+
+    /// <summary>Restores a backup as new seasons alongside any existing data (never
+    /// overwrites). Atomic: the whole restore rolls back if any part fails.</summary>
+    public async Task<BackupRestoreResult> RestoreAllAsync(string json)
+    {
+        var backup = ParseBackup(json);
+        var result = new BackupRestoreResult();
+
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            foreach (var seasonExport in backup.Seasons)
+            {
+                if (seasonExport.Season is null) continue;
+                await ImportSeasonCoreAsync(seasonExport, markImported: false);
+                result.SeasonsRestored++;
+                result.GamesRestored += seasonExport.Games.Count;
+            }
+        });
+
+        return result;
+    }
+
+    /// <summary>Read-only forecast of a restore (season/team/player/game counts + when the
+    /// backup was made), so the UI can confirm before writing. Performs no writes.</summary>
+    public static BackupPreview AnalyzeRestore(string json)
+    {
+        var backup = ParseBackup(json);
+        return new BackupPreview
+        {
+            SeasonCount = backup.Seasons.Count,
+            TeamCount = backup.Seasons.Sum(s => s.Teams.Count),
+            PlayerCount = backup.Seasons.Sum(s => s.Teams.Sum(t => t.Players.Count)),
+            GameCount = backup.Seasons.Sum(s => s.Games.Count),
+            ExportDate = backup.ExportDate
+        };
+    }
+
+    private static BackupFile ParseBackup(string json)
+    {
+        BackupFile? backup;
+        try
+        {
+            backup = JsonSerializer.Deserialize<BackupFile>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("This file isn't a valid BasketballScout backup.", ex);
+        }
+
+        if (backup is null || backup.Seasons is null)
+            throw new InvalidOperationException("This file isn't a valid BasketballScout backup.");
+        return backup;
     }
 
     /// <summary>Read-only forecast of a season import (which always creates a fresh season),
@@ -601,6 +710,35 @@ public class SeasonDataExport
     public string Name { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+    // Game format (US-21) so export/backup round-trips a season's clock settings.
+    public int PeriodLengthMinutes { get; set; } = 10;
+    public int PeriodCount { get; set; } = 4;
+    public int OvertimeLengthMinutes { get; set; } = 5;
+}
+
+// Full-backup DTOs (US-26)
+public class BackupFile
+{
+    public int Version { get; set; } = 1;
+    public string AppVersion { get; set; } = string.Empty;
+    public DateTime ExportDate { get; set; }
+    public List<SeasonExport> Seasons { get; set; } = [];
+}
+
+/// <summary>Read-only forecast of a restore, shown for confirmation before committing.</summary>
+public class BackupPreview
+{
+    public int SeasonCount { get; set; }
+    public int TeamCount { get; set; }
+    public int PlayerCount { get; set; }
+    public int GameCount { get; set; }
+    public DateTime ExportDate { get; set; }
+}
+
+public class BackupRestoreResult
+{
+    public int SeasonsRestored { get; set; }
+    public int GamesRestored { get; set; }
 }
 
 public class TeamExport

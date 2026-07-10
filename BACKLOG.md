@@ -554,7 +554,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 📋 **US-23** — Zone-based shot analytics & heat map (planned).
 - 📋 **US-24** — Opponent tendency scout report (planned).
 - 📋 **US-25** — Season standings & scoring-run detection (planned).
-- 📋 **US-26** — One-tap backup & restore (planned).
+- 🔄 **US-26** — One-tap backup & restore (implemented; PR open).
 - 📋 **US-27** — Phone-portrait scoring layout (planned).
 - 📋 **US-28** — Edit/delete any event from the play-by-play log (planned).
 - 📋 **US-29** — DbContext lifetime hardening (planned).
@@ -570,7 +570,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 **Phase 2 — courtside trust:**
 4. **US-20** — per-quarter team fouls, bonus & foul trouble. Highest-value scoring-screen upgrade. ✅ *done*
 5. **US-21** — configurable game format. Depends on US-18's time helper. ✅ *done*
-6. **US-26** — backup & restore. Depends on US-19's serialization parity.
+6. **US-26** — backup & restore. Depends on US-19's serialization parity. ✅ *done*
 
 **Phase 3 — the scout differentiators:**
 7. **US-29** — DbContext hardening (do before adding more concurrent readers).

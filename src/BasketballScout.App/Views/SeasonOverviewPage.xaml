@@ -12,7 +12,7 @@
                      Command="{Binding ShowAboutCommand}" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="Auto,*" Padding="16">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="16">
         <Grid ColumnDefinitions="*,Auto">
             <Label Text="Basketball Scout"
                    FontSize="24"
@@ -28,7 +28,29 @@
                     Padding="16,8" />
         </Grid>
 
-        <CollectionView Grid.Row="1"
+        <!-- Backup / restore (US-26) -->
+        <VerticalStackLayout Grid.Row="1" Spacing="8" Margin="0,12,0,0">
+            <Border IsVisible="{Binding BackupReminderVisible}"
+                    BackgroundColor="{AppThemeBinding Light=#fff7e6, Dark=#2a1f0a}"
+                    Stroke="{AppThemeBinding Light=#f0d090, Dark=#3a2a10}"
+                    StrokeShape="RoundRectangle 8" Padding="12,8">
+                <Label Text="⚠ It's been a while since your last backup. Tap 'Back up all data' to keep your seasons safe."
+                       FontSize="12" TextColor="{AppThemeBinding Light=#8a6d1a, Dark=#fbbf24}" />
+            </Border>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button Text="⤴ Back up all data"
+                        Command="{Binding BackupAllCommand}"
+                        BackgroundColor="#13251a" TextColor="#34d399"
+                        FontAttributes="Bold" CornerRadius="8" FontSize="13" HeightRequest="42" />
+                <Button Grid.Column="1" Text="⤵ Restore"
+                        Command="{Binding RestoreAllCommand}"
+                        BackgroundColor="{AppThemeBinding Light=#f0f0f0, Dark=#1a1a1a}"
+                        TextColor="{AppThemeBinding Light=#333, Dark=#ccc}"
+                        FontAttributes="Bold" CornerRadius="8" FontSize="13" HeightRequest="42" />
+            </Grid>
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="2"
                         ItemsSource="{Binding Seasons}"
                         Margin="0,16,0,0"
                         EmptyView="No seasons yet. Tap '+ Season' to create one.">
