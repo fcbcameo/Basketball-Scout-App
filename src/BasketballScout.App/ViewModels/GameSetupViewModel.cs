@@ -143,6 +143,13 @@ public partial class GameSetupViewModel : ObservableObject
             return;
         }
 
+        // Snapshot the season's game format onto the game (US-21), so later season edits
+        // never change this game's clock or minutes math.
+        var season = await _seasonRepository.GetByIdAsync(SeasonId);
+        int periodMinutes = season is { PeriodLengthMinutes: > 0 } ? season.PeriodLengthMinutes : 10;
+        int periods = season is { PeriodCount: > 0 } ? season.PeriodCount : 4;
+        int otMinutes = season is { OvertimeLengthMinutes: > 0 } ? season.OvertimeLengthMinutes : 5;
+
         var game = new Game
         {
             SeasonId = SeasonId,
@@ -150,7 +157,10 @@ public partial class GameSetupViewModel : ObservableObject
             AwayTeamId = SelectedAwayTeam.Id,
             GameDate = GameDate,
             Location = Location.Trim(),
-            ExportGuid = Guid.NewGuid().ToString() // stable identity for export/duplicate detection (US-19)
+            ExportGuid = Guid.NewGuid().ToString(), // stable identity for export/duplicate detection (US-19)
+            PeriodLengthSeconds = periodMinutes * 60,
+            OvertimeLengthSeconds = otMinutes * 60,
+            RegulationPeriods = periods
         };
 
         var created = await _gameRepository.AddAsync(game);

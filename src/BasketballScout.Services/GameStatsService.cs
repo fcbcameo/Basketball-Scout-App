@@ -33,7 +33,7 @@ public class GameStatsService
         var awayTeam = await _teamRepository.GetByIdAsync(game.AwayTeamId);
 
         var metrics = ComputeGameMetrics(events, game.HomeTeamId, game.AwayTeamId,
-            homeTeam?.Players ?? [], awayTeam?.Players ?? []);
+            homeTeam?.Players ?? [], awayTeam?.Players ?? [], GameFormat.FromGame(game));
 
         var homeLines = BuildBoxLines(events, homeTeam?.Players ?? [], metrics);
         var awayLines = BuildBoxLines(events, awayTeam?.Players ?? [], metrics);
@@ -144,7 +144,7 @@ public class GameStatsService
             var awayTeam = teams.FirstOrDefault(t => t.Id == game.AwayTeamId);
 
             var metrics = ComputeGameMetrics(events, game.HomeTeamId, game.AwayTeamId,
-                homeTeam?.Players ?? [], awayTeam?.Players ?? []);
+                homeTeam?.Players ?? [], awayTeam?.Players ?? [], GameFormat.FromGame(game));
 
             var playersInGame = events
                 .Where(e => e.StatType != StatType.SubIn && e.StatType != StatType.SubOut)
@@ -219,7 +219,8 @@ public class GameStatsService
         int homeTeamId,
         int awayTeamId,
         ICollection<Player> homePlayers,
-        ICollection<Player> awayPlayers)
+        ICollection<Player> awayPlayers,
+        GameFormat format)
     {
         var metrics = new GameMetrics();
 
@@ -234,7 +235,7 @@ public class GameStatsService
 
         // Order events by absolute time + id for a stable timeline
         var ordered = events
-            .Select(e => new { Event = e, AbsSec = GameTiming.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
+            .Select(e => new { Event = e, AbsSec = format.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
             .OrderBy(x => x.AbsSec)
             .ThenBy(x => x.Event.Id)
             .ToList();

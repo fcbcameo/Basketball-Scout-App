@@ -83,7 +83,7 @@ public static class MauiProgram
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ScoutDbContext>();
             db.Database.EnsureCreated();
-            EnsureGameColumns(db);
+            EnsureAdditiveColumns(db);
         }
         catch (Exception ex)
         {
@@ -96,36 +96,48 @@ public static class MauiProgram
     /// <summary>
     /// EnsureCreated() builds the schema only when the database file doesn't exist yet;
     /// it never alters an existing database, and this project has no EF migrations. So for
-    /// older installs we additively patch the Games table with the lifecycle columns added
-    /// in US-10. Each ALTER is guarded by a PRAGMA check, so this is idempotent and safe.
-    /// Legacy games predate the feature, so Status backfills to 1 (Finished).
+    /// older installs we additively patch new columns onto existing tables. Each ALTER is
+    /// guarded by a PRAGMA check, so this is idempotent and safe. Defaults backfill legacy
+    /// rows sensibly (e.g. games → Finished, standard 10:00 × 4 format).
     /// </summary>
-    private static void EnsureGameColumns(ScoutDbContext db)
+    private static void EnsureAdditiveColumns(ScoutDbContext db)
     {
         var connection = db.Database.GetDbConnection();
         if (connection.State != System.Data.ConnectionState.Open)
             connection.Open();
 
-        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var pragma = connection.CreateCommand())
+        void AddColumns(string table, params (string Name, string Definition)[] columns)
         {
-            pragma.CommandText = "PRAGMA table_info(Games);";
-            using var reader = pragma.ExecuteReader();
-            while (reader.Read())
-                existing.Add(reader.GetString(1)); // column 1 = name
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var pragma = connection.CreateCommand())
+            {
+                pragma.CommandText = $"PRAGMA table_info({table});";
+                using var reader = pragma.ExecuteReader();
+                while (reader.Read())
+                    existing.Add(reader.GetString(1)); // column 1 = name
+            }
+
+            foreach (var (name, definition) in columns)
+            {
+                if (existing.Contains(name)) continue;
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = $"ALTER TABLE {table} ADD COLUMN {definition};";
+                cmd.ExecuteNonQuery();
+            }
         }
 
-        void AddColumn(string name, string definition)
-        {
-            if (existing.Contains(name)) return;
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"ALTER TABLE Games ADD COLUMN {definition};";
-            cmd.ExecuteNonQuery();
-        }
+        AddColumns("Games",
+            ("Status", "Status INTEGER NOT NULL DEFAULT 1"),                       // legacy games → Finished
+            ("ClockSecondsRemaining", "ClockSecondsRemaining INTEGER NOT NULL DEFAULT 600"),
+            ("CurrentPeriod", "CurrentPeriod INTEGER NOT NULL DEFAULT 1"),
+            ("ExportGuid", "ExportGuid TEXT NULL"),                                 // US-19 duplicate detection
+            ("PeriodLengthSeconds", "PeriodLengthSeconds INTEGER NOT NULL DEFAULT 600"),   // US-21 format snapshot
+            ("OvertimeLengthSeconds", "OvertimeLengthSeconds INTEGER NOT NULL DEFAULT 300"),
+            ("RegulationPeriods", "RegulationPeriods INTEGER NOT NULL DEFAULT 4"));
 
-        AddColumn("Status", "Status INTEGER NOT NULL DEFAULT 1");                       // legacy games → Finished
-        AddColumn("ClockSecondsRemaining", "ClockSecondsRemaining INTEGER NOT NULL DEFAULT 600");
-        AddColumn("CurrentPeriod", "CurrentPeriod INTEGER NOT NULL DEFAULT 1");
-        AddColumn("ExportGuid", "ExportGuid TEXT NULL");                                 // US-19 duplicate detection
+        AddColumns("Seasons",
+            ("PeriodLengthMinutes", "PeriodLengthMinutes INTEGER NOT NULL DEFAULT 10"),    // US-21 format
+            ("PeriodCount", "PeriodCount INTEGER NOT NULL DEFAULT 4"),
+            ("OvertimeLengthMinutes", "OvertimeLengthMinutes INTEGER NOT NULL DEFAULT 5"));
     }
 }

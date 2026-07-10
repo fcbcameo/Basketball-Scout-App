@@ -115,10 +115,12 @@ public class PdfReportService
         var homeIds = homePlayers.Select(p => p.Id).ToHashSet();
         var awayIds = awayPlayers.Select(p => p.Id).ToHashSet();
 
-        int[] homeQ = ComputeQuarterScores(events, homeIds);
-        int[] awayQ = ComputeQuarterScores(events, awayIds);
+        var format = game is null ? GameFormat.Default : GameFormat.FromGame(game);
 
-        var flow = ComputeGameFlow(events, homeIds, awayIds);
+        int[] homeQ = ComputeQuarterScores(events, homeIds, format.RegulationPeriods);
+        int[] awayQ = ComputeQuarterScores(events, awayIds, format.RegulationPeriods);
+
+        var flow = ComputeGameFlow(events, homeIds, awayIds, format);
 
         var homeColor = XColor.FromArgb(0xE8, 0x5D, 0x26); // accent
         var awayColor = XColor.FromArgb(0x30, 0x70, 0xD0); // blue
@@ -142,7 +144,8 @@ public class PdfReportService
             awayTeamName: box.AwayTeamName,
             homeTeamName: box.HomeTeamName,
             homeColor: homeColor,
-            awayColor: awayColor);
+            awayColor: awayColor,
+            format: format);
 
         // Page 2: Home team
         DrawTeamPage(doc,
@@ -157,14 +160,15 @@ public class PdfReportService
             awayTeamName: box.AwayTeamName,
             homeTeamName: box.HomeTeamName,
             homeColor: homeColor,
-            awayColor: awayColor);
+            awayColor: awayColor,
+            format: format);
 
         // Page 3: Summary comparison
         DrawSummaryPage(doc, box, events, homeIds, awayIds);
 
         // Pages 4–5: Turnovers & Fouls per team
-        DrawTurnoversFoulsPage(doc, box.HomeTeamName, homePlayers, events);
-        DrawTurnoversFoulsPage(doc, box.AwayTeamName, awayPlayers, events);
+        DrawTurnoversFoulsPage(doc, box.HomeTeamName, homePlayers, events, format);
+        DrawTurnoversFoulsPage(doc, box.AwayTeamName, awayPlayers, events, format);
 
         using var stream = new MemoryStream();
         doc.Save(stream, false);
@@ -186,7 +190,8 @@ public class PdfReportService
         string awayTeamName,
         string homeTeamName,
         XColor homeColor,
-        XColor awayColor)
+        XColor awayColor,
+        GameFormat format)
     {
         var page = AddPage(doc);
         var gfx = XGraphics.FromPdfPage(page);
@@ -209,13 +214,14 @@ public class PdfReportService
         double qBoxY = bannerY;
         DrawQuarterScoreBox(gfx, qBoxX, qBoxY, qBoxW,
             awayTeamName, awayQuarterScores,
-            homeTeamName, homeQuarterScores);
+            homeTeamName, homeQuarterScores,
+            format.RegulationPeriods);
 
         // Game flow chart
         double flowX = qBoxX + qBoxW + 20;
         double flowW = W - Margin - flowX;
         DrawGameFlowChart(gfx, flowX, qBoxY, flowW, 55,
-            flow, awayTeamName, homeTeamName, awayColor, homeColor);
+            flow, awayTeamName, homeTeamName, awayColor, homeColor, format);
 
         // ── Box score table ──
         double tableY = bannerY + 65;
@@ -231,16 +237,18 @@ public class PdfReportService
     private static void DrawQuarterScoreBox(
         XGraphics gfx, double x, double y, double width,
         string awayName, int[] awayQ,
-        string homeName, int[] homeQ)
+        string homeName, int[] homeQ,
+        int regulationPeriods)
     {
-        // Columns: Name, <one per period: 1..4 then OT1, OT2, …>, T
+        // Columns: Name, <one per period: 1..regulation then OT1, OT2, …>, T
         int periods = Math.Max(awayQ.Length, homeQ.Length);
         double nameColW = width * 0.42;
         double qColW = (width - nameColW) / (periods + 1);
         double rowH = 14;
         double headerH = 14;
 
-        static string PeriodHeader(int i) => i < 4 ? (i + 1).ToString() : $"OT{i - 3}";
+        string PeriodHeader(int i) =>
+            i < regulationPeriods ? (i + 1).ToString() : $"OT{i - regulationPeriods + 1}";
 
         // Header row (period labels)
         gfx.DrawRectangle(new XSolidBrush(AccentColor), x, y, width, headerH);
@@ -308,7 +316,7 @@ public class PdfReportService
     private static void DrawGameFlowChart(
         XGraphics gfx, double x, double y, double width, double height,
         List<FlowPoint> flow, string awayName, string homeName,
-        XColor awayColor, XColor homeColor)
+        XColor awayColor, XColor homeColor, GameFormat format)
     {
         // Legend + title
         gfx.DrawString("Game Flow", SmallFont, new XSolidBrush(TextSecondary),
@@ -344,7 +352,7 @@ public class PdfReportService
 
         // Period vertical dividers + labels, positioned at each period boundary as a
         // fraction of the game's true length — OT-aware (labels 1–4, then OT1, OT2, …).
-        int maxSec = flow[^1].AbsSec <= 0 ? GameTiming.RegulationLengthSeconds : flow[^1].AbsSec;
+        int maxSec = flow[^1].AbsSec <= 0 ? format.RegulationLengthSeconds : flow[^1].AbsSec;
         int boundary = 0;
         int period = 1;
         while (boundary < maxSec)
@@ -356,9 +364,9 @@ public class PdfReportService
                 { DashStyle = XDashStyle.Dash },
                     fx, plotY, fx, plotY + plotH);
             }
-            int periodLen = GameTiming.PeriodLengthSeconds(period);
+            int periodLen = format.PeriodLengthSeconds(period);
             double sliceW = (periodLen / (double)maxSec) * plotW;
-            string label = period <= 4 ? period.ToString() : $"OT{period - 4}";
+            string label = format.IsOvertime(period) ? $"OT{period - format.RegulationPeriods}" : period.ToString();
             gfx.DrawString(label, TinyFont, new XSolidBrush(TextSecondary),
                 new XRect(fx, plotY - 10, sliceW, 8), XStringFormats.Center);
             boundary += periodLen;
@@ -785,25 +793,26 @@ public class PdfReportService
     private static void DrawTurnoversFoulsPage(
         PdfDocument doc, string teamName,
         IReadOnlyList<Player> roster,
-        IReadOnlyList<StatEvent> events)
+        IReadOnlyList<StatEvent> events,
+        GameFormat format)
     {
         var playerIds = roster.Select(p => p.Id).ToHashSet();
         var playerLookup = roster.ToDictionary(p => p.Id);
 
         var turnovers = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.Turnover)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => format.ParseClockSeconds(e.GameClock, format.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var personalFouls = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.PersonalFoul)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => format.ParseClockSeconds(e.GameClock, format.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var technicalFouls = events
             .Where(e => playerIds.Contains(e.PlayerId) && e.StatType == StatType.TechnicalFoul)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => format.ParseClockSeconds(e.GameClock, format.PeriodLengthSeconds(e.Quarter)))
             .ToList();
         var allFouls = personalFouls.Concat(technicalFouls)
-            .OrderBy(e => e.Quarter).ThenByDescending(e => GameTiming.ParseClockSeconds(e.GameClock, GameTiming.PeriodLengthSeconds(e.Quarter)))
+            .OrderBy(e => e.Quarter).ThenByDescending(e => format.ParseClockSeconds(e.GameClock, format.PeriodLengthSeconds(e.Quarter)))
             .ToList();
 
         var page = AddPage(doc);
@@ -829,7 +838,7 @@ public class PdfReportService
             ["Period", "Clock", "Player", "Turnover Type"],
             turnovers.Select(e => new[]
             {
-                PeriodName(e.Quarter),
+                PeriodName(e.Quarter, format.RegulationPeriods),
                 e.GameClock,
                 PlayerLabel(e, playerLookup),
                 "Other"
@@ -839,21 +848,25 @@ public class PdfReportService
             ["Period", "Clock", "Player", "Foul"],
             allFouls.Select(e => new[]
             {
-                PeriodName(e.Quarter),
+                PeriodName(e.Quarter, format.RegulationPeriods),
                 e.GameClock,
                 PlayerLabel(e, playerLookup),
                 e.StatType == StatType.TechnicalFoul ? "Technical" : "Personal"
             }).ToList());
     }
 
-    private static string PeriodName(int q) => q switch
+    private static string PeriodName(int q, int regulationPeriods)
     {
-        1 => "1st Period",
-        2 => "2nd Period",
-        3 => "3rd Period",
-        4 => "4th Period",
-        _ => $"OT{q - 4}"
-    };
+        if (q > regulationPeriods) return $"OT{q - regulationPeriods}";
+        return q switch
+        {
+            1 => "1st Period",
+            2 => "2nd Period",
+            3 => "3rd Period",
+            4 => "4th Period",
+            _ => $"Period {q}"
+        };
+    }
 
     private static string PlayerLabel(StatEvent e, Dictionary<int, Player> lookup)
         => lookup.TryGetValue(e.PlayerId, out var p) ? $"#{p.JerseyNumber} {p.Name}" : $"#{e.PlayerId}";
@@ -904,11 +917,11 @@ public class PdfReportService
 
     // ── Shared helpers: quarter scores, game flow, clock parsing ──────────────
 
-    private static int[] ComputeQuarterScores(IReadOnlyList<StatEvent> events, HashSet<int> teamPlayerIds)
+    private static int[] ComputeQuarterScores(IReadOnlyList<StatEvent> events, HashSet<int> teamPlayerIds, int regulationPeriods)
     {
-        // At least 4 periods (Q1–Q4); extend for any overtime periods present so
+        // At least the regulation periods; extend for any overtime periods present so
         // both teams' arrays come out the same length.
-        int periods = 4;
+        int periods = regulationPeriods;
         foreach (var e in events)
             periods = Math.Max(periods, e.Quarter);
 
@@ -932,16 +945,16 @@ public class PdfReportService
 
     private static List<FlowPoint> ComputeGameFlow(
         IReadOnlyList<StatEvent> events,
-        HashSet<int> homeIds, HashSet<int> awayIds)
+        HashSet<int> homeIds, HashSet<int> awayIds, GameFormat format)
     {
-        int maxPeriod = 4;
+        int maxPeriod = format.RegulationPeriods;
         foreach (var e in events) maxPeriod = Math.Max(maxPeriod, e.Quarter);
-        int totalSeconds = GameTiming.TotalSecondsForMaxPeriod(maxPeriod);
+        int totalSeconds = format.TotalSecondsForMaxPeriod(maxPeriod);
 
         var ordered = events
             .Where(e => e.ShotResult == ShotResult.Made &&
                 (e.StatType == StatType.Points2 || e.StatType == StatType.Points3 || e.StatType == StatType.FreeThrow))
-            .Select(e => new { Event = e, AbsSec = GameTiming.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
+            .Select(e => new { Event = e, AbsSec = format.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
             .OrderBy(x => x.AbsSec).ThenBy(x => x.Event.Id)
             .ToList();
 
