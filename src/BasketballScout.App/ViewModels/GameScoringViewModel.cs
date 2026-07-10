@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
+using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -32,8 +33,8 @@ public partial class GameScoringViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PeriodLabel))]
     public partial int Quarter { get; set; } = 1;
 
-    /// <summary>"Q1".."Q4" for regulation, then "OT1", "OT2", … with no cap.</summary>
-    public string PeriodLabel => Quarter <= 4 ? $"Q{Quarter}" : $"OT{Quarter - 4}";
+    /// <summary>"Q1".."Qn" for regulation, then "OT1", "OT2", … — n is this game's format.</summary>
+    public string PeriodLabel => _format.PeriodLabel(Quarter);
 
     // Team fouls are per PERIOD (they reset each quarter/OT) and derived from events, so
     // undo/corrections/resume stay correct. See RecomputeFouls (US-20).
@@ -67,12 +68,12 @@ public partial class GameScoringViewModel : ObservableObject
 
     public string ClockColor => IsClockRunning ? "#4ade80" : "#ddd";
 
-    private const int QuarterLengthSeconds = 600;   // 10:00 regulation
-    private const int OvertimeLengthSeconds = 300;   // 5:00 overtime
-    private int _clockSeconds = QuarterLengthSeconds;
+    // This game's period structure (US-21) — set from the game's snapshot on load; the
+    // default (10:00 × 4, 5:00 OT) is only used until the game is hydrated.
+    private GameFormat _format = GameFormat.Default;
+    private int _clockSeconds = GameFormat.Default.RegulationPeriodSeconds;
 
-    private static int PeriodLengthSeconds(int quarter) =>
-        quarter >= 5 ? OvertimeLengthSeconds : QuarterLengthSeconds;
+    private int PeriodLengthSeconds(int quarter) => _format.PeriodLengthSeconds(quarter);
     private readonly System.Timers.Timer _clockTimer = new(1000) { AutoReset = true };
 
     // ── Teams ──
@@ -237,6 +238,10 @@ public partial class GameScoringViewModel : ObservableObject
 
         _status = game.Status;
 
+        // This game's period structure (US-21). Set before Quarter so PeriodLabel is right.
+        _format = GameFormat.FromGame(game);
+        OnPropertyChanged(nameof(PeriodLabel));
+
         // Load players
         _allHomePlayers = (await _playerRepository.GetByTeamIdAsync(game.HomeTeamId)).ToList();
         _allAwayPlayers = (await _playerRepository.GetByTeamIdAsync(game.AwayTeamId)).ToList();
@@ -273,8 +278,12 @@ public partial class GameScoringViewModel : ObservableObject
 
         if (!anySubEvents)
         {
-            // First entry into a new game: persist the starting lineup as SubIn events
-            // so GameStatsService can reconstruct minutes and +/- later.
+            // Fresh game: start the clock at this format's period length.
+            _clockSeconds = _format.PeriodLengthSeconds(1);
+            GameClock = FormatClock(_clockSeconds);
+
+            // Persist the starting lineup as SubIn events so GameStatsService can
+            // reconstruct minutes and +/- later.
             foreach (var p in HomeOnCourt.Concat(AwayOnCourt))
             {
                 await _statEventRepository.AddAsync(new StatEvent
@@ -283,7 +292,7 @@ public partial class GameScoringViewModel : ObservableObject
                     PlayerId = p.Id,
                     StatType = StatType.SubIn,
                     Quarter = 1,
-                    GameClock = "10:00",
+                    GameClock = GameClock,
                     Timestamp = DateTime.UtcNow
                 });
             }

@@ -29,6 +29,16 @@ public partial class SeasonDetailViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsExistingSeason { get; set; }
 
+    // ── Game format (US-21) ── minutes per period, number of periods, OT length.
+    [ObservableProperty]
+    public partial int PeriodLengthMinutes { get; set; } = 10;
+
+    [ObservableProperty]
+    public partial int PeriodCount { get; set; } = 4;
+
+    [ObservableProperty]
+    public partial int OvertimeLengthMinutes { get; set; } = 5;
+
     public ObservableCollection<Team> Teams { get; } = new();
 
     public SeasonDetailViewModel(
@@ -58,6 +68,9 @@ public partial class SeasonDetailViewModel : ObservableObject
         Name = season.Name;
         StartDate = season.StartDate;
         EndDate = season.EndDate;
+        PeriodLengthMinutes = season.PeriodLengthMinutes > 0 ? season.PeriodLengthMinutes : 10;
+        PeriodCount = season.PeriodCount > 0 ? season.PeriodCount : 4;
+        OvertimeLengthMinutes = season.OvertimeLengthMinutes > 0 ? season.OvertimeLengthMinutes : 5;
 
         var teams = await _teamRepository.GetBySeasonIdAsync(id);
         Teams.Clear();
@@ -76,6 +89,14 @@ public partial class SeasonDetailViewModel : ObservableObject
             return;
         }
 
+        // Clamp the format to sensible ranges so a typo can't produce a broken clock.
+        int periodMinutes = Math.Clamp(PeriodLengthMinutes, 1, 20);
+        int periods = Math.Clamp(PeriodCount, 1, 8);
+        int otMinutes = Math.Clamp(OvertimeLengthMinutes, 1, 20);
+        PeriodLengthMinutes = periodMinutes;
+        PeriodCount = periods;
+        OvertimeLengthMinutes = otMinutes;
+
         if (IsExistingSeason)
         {
             var season = await _seasonRepository.GetByIdAsync(SeasonId);
@@ -84,6 +105,9 @@ public partial class SeasonDetailViewModel : ObservableObject
                 season.Name = Name.Trim();
                 season.StartDate = StartDate;
                 season.EndDate = EndDate;
+                season.PeriodLengthMinutes = periodMinutes;
+                season.PeriodCount = periods;
+                season.OvertimeLengthMinutes = otMinutes;
                 await _seasonRepository.UpdateAsync(season);
             }
         }
@@ -93,7 +117,10 @@ public partial class SeasonDetailViewModel : ObservableObject
             {
                 Name = Name.Trim(),
                 StartDate = StartDate,
-                EndDate = EndDate
+                EndDate = EndDate,
+                PeriodLengthMinutes = periodMinutes,
+                PeriodCount = periods,
+                OvertimeLengthMinutes = otMinutes
             };
             var created = await _seasonRepository.AddAsync(season);
             SeasonId = created.Id;

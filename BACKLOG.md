@@ -549,7 +549,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 🔄 **US-18** — Fix stat correctness: OT minutes, averages, undo desync (implemented; PR open).
 - 🔄 **US-19** — Import/export integrity: season parity, transactions, preview (implemented; PR open).
 - 🔄 **US-20** — Per-quarter team fouls, bonus & foul-trouble warnings (implemented; PR open).
-- 📋 **US-21** — Configurable game format (planned).
+- 🔄 **US-21** — Configurable game format (implemented; PR open).
 - 📋 **US-22** — Linked possession flows (planned).
 - 📋 **US-23** — Zone-based shot analytics & heat map (planned).
 - 📋 **US-24** — Opponent tendency scout report (planned).
@@ -569,7 +569,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 
 **Phase 2 — courtside trust:**
 4. **US-20** — per-quarter team fouls, bonus & foul trouble. Highest-value scoring-screen upgrade. ✅ *done*
-5. **US-21** — configurable game format. Depends on US-18's time helper.
+5. **US-21** — configurable game format. Depends on US-18's time helper. ✅ *done*
 6. **US-26** — backup & restore. Depends on US-19's serialization parity.
 
 **Phase 3 — the scout differentiators:**

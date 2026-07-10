@@ -36,6 +36,27 @@
                         </VerticalStackLayout>
                     </Grid>
 
+                    <!-- Game format (US-21) -->
+                    <Label Text="GAME FORMAT" FontSize="11" FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#888, Dark=#777}" CharacterSpacing="1"
+                           Margin="0,6,0,0" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Min / period" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <Entry Text="{Binding PeriodLengthMinutes}" Keyboard="Numeric" FontSize="16" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Label Text="Periods" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <Entry Text="{Binding PeriodCount}" Keyboard="Numeric" FontSize="16" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2" Spacing="4">
+                            <Label Text="OT minutes" FontSize="13" TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+                            <Entry Text="{Binding OvertimeLengthMinutes}" Keyboard="Numeric" FontSize="16" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <Label Text="Applies to new games in this season (default 10 min × 4, 5 min OT)."
+                           FontSize="11" TextColor="{AppThemeBinding Light=#999, Dark=#666}" />
+
                     <Button Text="Save Season"
                             Command="{Binding SaveCommand}"
                             BackgroundColor="#e85d26"

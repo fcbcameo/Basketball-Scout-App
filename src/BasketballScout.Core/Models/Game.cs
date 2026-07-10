@@ -23,6 +23,12 @@ public class Game
     /// re-import of the same game can be detected as a duplicate. Null for legacy games.</summary>
     public string? ExportGuid { get; set; }
 
+    // ── Game format snapshot (US-21) ── Copied from the Season at creation so the clock,
+    // minutes and +/- math use this game's own lengths even if the season is edited later.
+    public int PeriodLengthSeconds { get; set; } = 600;
+    public int OvertimeLengthSeconds { get; set; } = 300;
+    public int RegulationPeriods { get; set; } = 4;
+
     public int SeasonId { get; set; }
     public Season Season { get; set; } = null!;
 
