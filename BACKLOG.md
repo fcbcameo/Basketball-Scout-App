@@ -557,7 +557,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 🔄 **US-26** — One-tap backup & restore (implemented; PR open).
 - 📋 **US-27** — Phone-portrait scoring layout (planned).
 - 📋 **US-28** — Edit/delete any event from the play-by-play log (planned).
-- 📋 **US-29** — DbContext lifetime hardening (planned).
+- 🔄 **US-29** — DbContext lifetime hardening (implemented; PR open).
 - 📋 **US-30** — Readability & tap-target accessibility pass (planned).
 
 ## Suggested implementation order (remaining)
@@ -573,7 +573,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 6. **US-26** — backup & restore. Depends on US-19's serialization parity. ✅ *done*
 
 **Phase 3 — the scout differentiators:**
-7. **US-29** — DbContext hardening (do before adding more concurrent readers).
+7. **US-29** — DbContext hardening (do before adding more concurrent readers). ✅ *done*
 8. **US-23** — zone analytics (foundation for US-24).
 9. **US-28** — play-log editing (small, high convenience).
 10. **US-25** — standings & runs.

@@ -27,10 +27,14 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // Database
+        // Database (US-29): a context FACTORY, not a single shared context. Repositories
+        // lease a short-lived context per operation via ScoutDbContextProvider, so
+        // overlapping loads can't collide and the change-tracker never grows unbounded.
         var dbPath = Path.Combine(FileSystem.AppDataDirectory, "basketballscout.db");
-        builder.Services.AddDbContext<ScoutDbContext>(options =>
+        builder.Services.AddDbContextFactory<ScoutDbContext>(options =>
             options.UseSqlite($"Data Source={dbPath}"));
+        builder.Services.AddSingleton<ScoutDbContextProvider>();
+        builder.Services.AddSingleton<IUnitOfWork>(sp => sp.GetRequiredService<ScoutDbContextProvider>());
 
         // Repositories
         builder.Services.AddScoped<ISeasonRepository, SeasonRepository>();
@@ -38,7 +42,6 @@ public static class MauiProgram
         builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
         builder.Services.AddScoped<IGameRepository, GameRepository>();
         builder.Services.AddScoped<IStatEventRepository, StatEventRepository>();
-        builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Services
         builder.Services.AddScoped<GameStatsService>();
@@ -80,8 +83,8 @@ public static class MauiProgram
         // surface it on screen instead of crashing silently at launch.
         try
         {
-            using var scope = app.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ScoutDbContext>();
+            var factory = app.Services.GetRequiredService<IDbContextFactory<ScoutDbContext>>();
+            using var db = factory.CreateDbContext();
             db.Database.EnsureCreated();
             EnsureAdditiveColumns(db);
         }

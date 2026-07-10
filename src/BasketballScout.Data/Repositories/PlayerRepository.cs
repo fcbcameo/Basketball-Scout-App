@@ -6,42 +6,52 @@ namespace BasketballScout.Data.Repositories;
 
 public class PlayerRepository : IPlayerRepository
 {
-    private readonly ScoutDbContext _db;
+    private readonly ScoutDbContextProvider _ctx;
 
-    public PlayerRepository(ScoutDbContext db)
+    public PlayerRepository(ScoutDbContextProvider ctx)
     {
-        _db = db;
+        _ctx = ctx;
     }
 
     public async Task<Player?> GetByIdAsync(int id)
-        => await _db.Players.FindAsync(id);
+    {
+        await using var lease = _ctx.Lease();
+        return await lease.Db.Players.FindAsync(id);
+    }
 
     public async Task<IReadOnlyList<Player>> GetByTeamIdAsync(int teamId)
-        => await _db.Players
+    {
+        await using var lease = _ctx.Lease();
+        return await lease.Db.Players
             .Where(p => p.TeamId == teamId)
             .OrderBy(p => p.JerseyNumber)
+            .AsNoTracking()
             .ToListAsync();
+    }
 
     public async Task<Player> AddAsync(Player player)
     {
-        _db.Players.Add(player);
-        await _db.SaveChangesAsync();
+        await using var lease = _ctx.Lease();
+        lease.Db.Players.Add(player);
+        await lease.Db.SaveChangesAsync();
         return player;
     }
 
     public async Task UpdateAsync(Player player)
     {
-        _db.Players.Update(player);
-        await _db.SaveChangesAsync();
+        await using var lease = _ctx.Lease();
+        lease.Db.Players.Update(player);
+        await lease.Db.SaveChangesAsync();
     }
 
     public async Task DeleteAsync(int id)
     {
-        var player = await _db.Players.FindAsync(id);
+        await using var lease = _ctx.Lease();
+        var player = await lease.Db.Players.FindAsync(id);
         if (player is not null)
         {
-            _db.Players.Remove(player);
-            await _db.SaveChangesAsync();
+            lease.Db.Players.Remove(player);
+            await lease.Db.SaveChangesAsync();
         }
     }
 }
