@@ -6,45 +6,56 @@ namespace BasketballScout.Data.Repositories;
 
 public class TeamRepository : ITeamRepository
 {
-    private readonly ScoutDbContext _db;
+    private readonly ScoutDbContextProvider _ctx;
 
-    public TeamRepository(ScoutDbContext db)
+    public TeamRepository(ScoutDbContextProvider ctx)
     {
-        _db = db;
+        _ctx = ctx;
     }
 
     public async Task<Team?> GetByIdAsync(int id)
-        => await _db.Teams
+    {
+        await using var lease = _ctx.Lease();
+        return await lease.Db.Teams
             .Include(t => t.Players)
+            .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == id);
+    }
 
     public async Task<IReadOnlyList<Team>> GetBySeasonIdAsync(int seasonId)
-        => await _db.Teams
+    {
+        await using var lease = _ctx.Lease();
+        return await lease.Db.Teams
             .Include(t => t.Players)
             .Where(t => t.SeasonId == seasonId)
             .OrderBy(t => t.Name)
+            .AsNoTracking()
             .ToListAsync();
+    }
 
     public async Task<Team> AddAsync(Team team)
     {
-        _db.Teams.Add(team);
-        await _db.SaveChangesAsync();
+        await using var lease = _ctx.Lease();
+        lease.Db.Teams.Add(team);
+        await lease.Db.SaveChangesAsync();
         return team;
     }
 
     public async Task UpdateAsync(Team team)
     {
-        _db.Teams.Update(team);
-        await _db.SaveChangesAsync();
+        await using var lease = _ctx.Lease();
+        lease.Db.Teams.Update(team);
+        await lease.Db.SaveChangesAsync();
     }
 
     public async Task DeleteAsync(int id)
     {
-        var team = await _db.Teams.FindAsync(id);
+        await using var lease = _ctx.Lease();
+        var team = await lease.Db.Teams.FindAsync(id);
         if (team is not null)
         {
-            _db.Teams.Remove(team);
-            await _db.SaveChangesAsync();
+            lease.Db.Teams.Remove(team);
+            await lease.Db.SaveChangesAsync();
         }
     }
 }
