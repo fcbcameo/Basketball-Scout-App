@@ -25,6 +25,9 @@
                            TextColor="White" VerticalOptions="Center" />
                     <Label Text="{Binding HomeFouls, StringFormat='F:{0}'}" FontSize="9"
                            TextColor="#555" VerticalOptions="Center" />
+                    <Label Text="BONUS" FontSize="8" FontAttributes="Bold" TextColor="#fbbf24"
+                           CharacterSpacing="1" VerticalOptions="Center"
+                           IsVisible="{Binding HomeInBonus}" />
                 </HorizontalStackLayout>
             </Border>
 
@@ -68,6 +71,9 @@
                     BackgroundColor="#0e0e0e" Padding="12,2"
                     HorizontalOptions="Center" VerticalOptions="Center">
                 <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
+                    <Label Text="BONUS" FontSize="8" FontAttributes="Bold" TextColor="#fbbf24"
+                           CharacterSpacing="1" VerticalOptions="Center"
+                           IsVisible="{Binding AwayInBonus}" />
                     <Label Text="{Binding AwayFouls, StringFormat='F:{0}'}" FontSize="9"
                            TextColor="#555" VerticalOptions="Center" />
                     <Label Text="{Binding AwayScore}" FontSize="24" FontAttributes="Bold"

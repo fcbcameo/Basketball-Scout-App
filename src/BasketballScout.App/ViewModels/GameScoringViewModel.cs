@@ -35,11 +35,28 @@ public partial class GameScoringViewModel : ObservableObject
     /// <summary>"Q1".."Q4" for regulation, then "OT1", "OT2", … with no cap.</summary>
     public string PeriodLabel => Quarter <= 4 ? $"Q{Quarter}" : $"OT{Quarter - 4}";
 
+    // Team fouls are per PERIOD (they reset each quarter/OT) and derived from events, so
+    // undo/corrections/resume stay correct. See RecomputeFouls (US-20).
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AwayInBonus))]
     public partial int HomeFouls { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HomeInBonus))]
     public partial int AwayFouls { get; set; }
+
+    /// <summary>FIBA bonus: once a team commits 5 fouls in the period the OTHER team shoots
+    /// bonus free throws. Home is in the bonus when Away has reached 5 this period.</summary>
+    public bool HomeInBonus => AwayFouls >= 5;
+    public bool AwayInBonus => HomeFouls >= 5;
+
+    /// <summary>Game-total personal+technical fouls per player id, for foul-trouble flags
+    /// (4 = warning, 5 = fouled out). Derived from events; recomputed on every foul change.</summary>
+    public Dictionary<int, int> PlayerFouls { get; } = new();
+
+    /// <summary>Raised after foul counts are recomputed, so the view can restyle roster
+    /// cards (amber at 4, red at 5).</summary>
+    public event Action? FoulsChanged;
 
     [ObservableProperty]
     public partial string GameClock { get; set; } = "10:00";
@@ -277,6 +294,7 @@ public partial class GameScoringViewModel : ObservableObject
             // and restore the exact clock and period the scorer left off at.
             RebuildFromEvents(existing);
             Quarter = Math.Max(1, game.CurrentPeriod);
+            RecomputeFouls(existing); // per-period team fouls need the restored Quarter (US-20)
             _clockSeconds = Math.Clamp(game.ClockSecondsRemaining, 0, PeriodLengthSeconds(Quarter));
             GameClock = FormatClock(_clockSeconds);
             IsClockRunning = false; // always resume paused — never tick while away
@@ -340,11 +358,6 @@ public partial class GameScoringViewModel : ObservableObject
                 if (isHome) HomeScore += pts; else AwayScore += pts;
             }
 
-            if (e.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
-            {
-                if (isHome) HomeFouls++; else AwayFouls++;
-            }
-
             if (e.StatType is StatType.Points2 or StatType.Points3 && e.CourtX.HasValue && e.CourtY.HasValue)
             {
                 ShotChartDots.Add(new ShotDot
@@ -370,6 +383,36 @@ public partial class GameScoringViewModel : ObservableObject
                 EventId = e.Id
             });
         }
+    }
+
+    // ── Foul tracking (US-20) ──
+    /// <summary>Re-reads events and recomputes per-period team fouls + per-player totals.</summary>
+    private async Task RecomputeFoulsAsync()
+    {
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        RecomputeFouls(events);
+    }
+
+    /// <summary>Rebuilds foul state from the event log: per-period team fouls (for the
+    /// bonus) and game-total per-player fouls (for foul-trouble/foul-out flags). Because
+    /// it derives everything from events, undo, corrections and resume are all correct.</summary>
+    private void RecomputeFouls(IReadOnlyList<StatEvent> events)
+    {
+        PlayerFouls.Clear();
+        int homePeriod = 0, awayPeriod = 0;
+        foreach (var e in events)
+        {
+            if (e.StatType is not (StatType.PersonalFoul or StatType.TechnicalFoul)) continue;
+            PlayerFouls[e.PlayerId] = PlayerFouls.GetValueOrDefault(e.PlayerId) + 1;
+            if (e.Quarter == Quarter)
+            {
+                if (_allHomePlayers.Any(p => p.Id == e.PlayerId)) homePeriod++;
+                else awayPeriod++;
+            }
+        }
+        HomeFouls = homePeriod;
+        AwayFouls = awayPeriod;
+        FoulsChanged?.Invoke();
     }
 
     // ── Player selection ──
@@ -604,12 +647,19 @@ public partial class GameScoringViewModel : ObservableObject
         };
         await _statEventRepository.AddAsync(ev);
 
+        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome, ev.Id);
+
         if (statId is "pf" or "tech")
         {
-            if (isHome) HomeFouls++; else AwayFouls++;
+            await RecomputeFoulsAsync();
+            // Nudge a substitution the moment a player fouls out (FIBA: 5 personal/technical).
+            if (SelectedPlayer is not null && PlayerFouls.GetValueOrDefault(SelectedPlayer.Id) >= 5)
+            {
+                ActionRecorded?.Invoke($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} fouled out — substitute");
+                return;
+            }
         }
 
-        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome, ev.Id);
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
@@ -645,6 +695,8 @@ public partial class GameScoringViewModel : ObservableObject
         // may sit on top and must stay).
         var row = PlayLog.FirstOrDefault(p => p.EventId == last.Id);
         if (row is not null) PlayLog.Remove(row);
+
+        await RecomputeFoulsAsync(); // team/player fouls are event-derived (US-20)
 
         ClearFollowUp();
         PendingShot = null;
@@ -703,11 +755,8 @@ public partial class GameScoringViewModel : ObservableObject
             else AwayScore = Math.Max(0, AwayScore - pts);
         }
 
-        if (e.StatType is StatType.PersonalFoul or StatType.TechnicalFoul)
-        {
-            if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
-            else AwayFouls = Math.Max(0, AwayFouls - 1);
-        }
+        // Team fouls are derived from events (US-20), so they are recomputed by the caller
+        // after the event is deleted rather than decremented here.
 
         if (e.StatType is StatType.Points2 or StatType.Points3)
         {
@@ -751,6 +800,7 @@ public partial class GameScoringViewModel : ObservableObject
 
         ApplyReversal(e);
         await _statEventRepository.DeleteAsync(e.Id);
+        await RecomputeFoulsAsync();
         await RefreshCorrectionsAsync();
     }
 
@@ -758,7 +808,6 @@ public partial class GameScoringViewModel : ObservableObject
     private async Task AddFoulAsync(Player? player)
     {
         if (player is null) return;
-        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
 
         await _statEventRepository.AddAsync(new StatEvent
         {
@@ -770,7 +819,7 @@ public partial class GameScoringViewModel : ObservableObject
             Timestamp = DateTime.UtcNow
         });
 
-        if (isHome) HomeFouls++; else AwayFouls++;
+        await RecomputeFoulsAsync();
         await RefreshCorrectionsAsync();
     }
 
@@ -786,11 +835,8 @@ public partial class GameScoringViewModel : ObservableObject
             .FirstOrDefault();
         if (lastFoul is null) return;
 
-        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
-        if (isHome) HomeFouls = Math.Max(0, HomeFouls - 1);
-        else AwayFouls = Math.Max(0, AwayFouls - 1);
-
         await _statEventRepository.DeleteAsync(lastFoul.Id);
+        await RecomputeFoulsAsync();
         await RefreshCorrectionsAsync();
     }
 
@@ -843,6 +889,7 @@ public partial class GameScoringViewModel : ObservableObject
         StopClock();
         _clockSeconds = PeriodLengthSeconds(Quarter);
         GameClock = FormatClock(_clockSeconds);
+        _ = RecomputeFoulsAsync(); // team fouls reset for the new period (US-20)
         _ = SaveStateAsync();
     }
 

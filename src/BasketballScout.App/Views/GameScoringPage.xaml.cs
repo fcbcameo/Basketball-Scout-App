@@ -29,7 +29,12 @@ public partial class GameScoringPage : ContentPage
         // Brief toasts: what an undo removed (US-4), and what a stat tap logged (US-8)
         _vm.ActionUndone += OnActionUndone;
         _vm.ActionRecorded += OnActionRecorded;
+
+        // Restyle roster cards when foul counts change (foul-trouble flags, US-20)
+        _vm.FoulsChanged += OnFoulsChanged;
     }
+
+    private void OnFoulsChanged() => MainThread.BeginInvokeOnMainThread(UpdatePlayerHighlighting);
 
     protected override void OnDisappearing()
     {
@@ -112,13 +117,18 @@ public partial class GameScoringPage : ContentPage
         var selectedId = _vm.SelectedPlayer?.Id;
         bool isHome = _vm.IsHomeSelected;
 
-        HighlightPanel(HomeOnCourtPanel, selectedId, _vm.HomeTeamColor, isActive: true);
-        HighlightPanel(HomeBenchPanel, selectedId, _vm.HomeTeamColor, isActive: false);
-        HighlightPanel(AwayOnCourtPanel, selectedId, _vm.AwayTeamColor, isActive: true);
-        HighlightPanel(AwayBenchPanel, selectedId, _vm.AwayTeamColor, isActive: false);
+        HighlightPanel(HomeOnCourtPanel, selectedId, _vm.HomeTeamColor, isActive: true, _vm.PlayerFouls);
+        HighlightPanel(HomeBenchPanel, selectedId, _vm.HomeTeamColor, isActive: false, _vm.PlayerFouls);
+        HighlightPanel(AwayOnCourtPanel, selectedId, _vm.AwayTeamColor, isActive: true, _vm.PlayerFouls);
+        HighlightPanel(AwayBenchPanel, selectedId, _vm.AwayTeamColor, isActive: false, _vm.PlayerFouls);
     }
 
-    private static void HighlightPanel(Layout panel, int? selectedId, string teamColorHex, bool isActive)
+    // Foul-trouble border colors (US-20): amber at 4, red at 5 (fouled out).
+    private static readonly Color FoulWarnColor = Color.FromArgb("#fbbf24");
+    private static readonly Color FoulOutColor = Color.FromArgb("#f87171");
+
+    private static void HighlightPanel(Layout panel, int? selectedId, string teamColorHex, bool isActive,
+        IReadOnlyDictionary<int, int> playerFouls)
     {
         var teamColor = Color.FromArgb(teamColorHex);
 
@@ -127,6 +137,7 @@ public partial class GameScoringPage : ContentPage
             if (child is not Border border) continue;
             var player = border.BindingContext as Player;
             bool isSelected = player is not null && player.Id == selectedId;
+            int fouls = player is not null ? playerFouls.GetValueOrDefault(player.Id) : 0;
 
             if (isSelected)
             {
@@ -139,7 +150,10 @@ public partial class GameScoringPage : ContentPage
             else
             {
                 border.BackgroundColor = Color.FromArgb("#141414");
-                border.Stroke = Color.FromArgb("#1a1a1a");
+                // Foul trouble tints the border (amber 4, red 5); otherwise the default.
+                border.Stroke = fouls >= 5 ? FoulOutColor
+                    : fouls >= 4 ? FoulWarnColor
+                    : Color.FromArgb("#1a1a1a");
 
                 // Restore default colors based on active/bench
                 var numColor = Color.FromArgb(isActive ? "#bbb" : "#444");
