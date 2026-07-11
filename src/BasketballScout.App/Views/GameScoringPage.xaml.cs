@@ -68,12 +68,22 @@ public partial class GameScoringPage : ContentPage
             case nameof(GameScoringViewModel.FollowUp):
                 if (_vm.FollowUp is not null)
                 {
-                    FollowUpLabel.Text = _vm.FollowUp.Type == "assist" ? "ASSISTED BY?" : "REBOUND BY?";
-                    FollowUpPopup.Stroke = _vm.FollowUp.Type == "assist"
-                        ? Color.FromArgb("#4ade8033") : Color.FromArgb("#fbbf2433");
-                    FollowUpPopup.BackgroundColor = _vm.FollowUp.Type == "assist"
-                        ? Color.FromArgb("#121a12") : Color.FromArgb("#1a1a12");
+                    FollowUpLabel.Text = _vm.FollowUp.Type switch
+                    {
+                        "assist" => "ASSISTED BY?",
+                        "rebound" => "REBOUND BY?",
+                        "foul" => "FOULED WHO?",
+                        "steal" => "TURNOVER BY?",
+                        _ => "SELECT PLAYER"
+                    };
+                    bool green = _vm.FollowUp.Type == "assist";
+                    FollowUpPopup.Stroke = green ? Color.FromArgb("#4ade8033") : Color.FromArgb("#fbbf2433");
+                    FollowUpPopup.BackgroundColor = green ? Color.FromArgb("#121a12") : Color.FromArgb("#1a1a12");
                 }
+                UpdateOverlayInputTransparent();
+                break;
+
+            case nameof(GameScoringViewModel.FtSequence):
                 UpdateOverlayInputTransparent();
                 break;
 
@@ -106,7 +116,7 @@ public partial class GameScoringPage : ContentPage
     /// </summary>
     private void UpdateOverlayInputTransparent()
     {
-        CourtOverlay.InputTransparent = _vm.FollowUp is not null;
+        CourtOverlay.InputTransparent = _vm.FollowUp is not null || _vm.FtSequence is not null;
     }
 
     /// <summary>
@@ -345,6 +355,13 @@ public partial class GameScoringPage : ContentPage
 
     private void OnFTMissClicked(object? sender, EventArgs e)
         => _vm.RecordFreeThrowCommand.Execute(false);
+
+    // ── Foul → free-throw sequence handlers (US-22) ──
+    private void OnFtSeqMadeClicked(object? sender, EventArgs e)
+        => _vm.FtSequenceShotCommand.Execute(true);
+
+    private void OnFtSeqMissClicked(object? sender, EventArgs e)
+        => _vm.FtSequenceShotCommand.Execute(false);
 
     private void OnAstClicked(object? sender, EventArgs e)
         => _vm.RecordStatCommand.Execute("ast");

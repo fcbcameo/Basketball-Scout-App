@@ -135,6 +135,16 @@ public partial class GameScoringViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowFollowUpDivider { get; set; }
 
+    // Free-throw sequence after a foul (US-22): each ✓/✗ records an FT linked to the foul.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFtSequence))]
+    public partial FtSequenceState? FtSequence { get; set; }
+
+    public bool HasFtSequence => FtSequence is not null;
+
+    [ObservableProperty]
+    public partial string FtSequenceText { get; set; } = string.Empty;
+
     [ObservableProperty]
     public partial bool IsCorrectionsOpen { get; set; }
 
@@ -490,7 +500,7 @@ public partial class GameScoringViewModel : ObservableObject
     [RelayCommand]
     private void SelectPlayer(Player player)
     {
-        if (FollowUp is not null) return;
+        if (FollowUp is not null || FtSequence is not null) return;
 
         if (SelectedPlayer?.Id == player.Id)
         {
@@ -508,7 +518,7 @@ public partial class GameScoringViewModel : ObservableObject
     [RelayCommand]
     private void CourtTapped(ShotPending shot)
     {
-        if (SelectedPlayer is null || FollowUp is not null) return;
+        if (SelectedPlayer is null || FollowUp is not null || FtSequence is not null) return;
         PendingShot = shot;
     }
 
@@ -586,6 +596,17 @@ public partial class GameScoringViewModel : ObservableObject
                     target.Add(new FollowUpCandidate(p, color));
             }
         }
+        else if (type is "foul" or "steal")
+        {
+            // The OPPOSING on-court team: who was fouled (US-22 foul→FT) / who turned it
+            // over (US-22 steal→turnover).
+            bool opponentIsHome = !IsHomeSelected;
+            var opponents = opponentIsHome ? HomeOnCourt : AwayOnCourt;
+            var target = opponentIsHome ? HomeFollowUpCandidates : AwayFollowUpCandidates;
+            var color = opponentIsHome ? homeColor : awayColor;
+            foreach (var p in opponents)
+                target.Add(new FollowUpCandidate(p, color));
+        }
         else // rebound — on-court players from both teams, kept in separate groups
         {
             foreach (var p in HomeOnCourt)
@@ -618,34 +639,111 @@ public partial class GameScoringViewModel : ObservableObject
 
         if (player is not null)
         {
-            var isAssist = FollowUp.Type == "assist";
-            var statType = isAssist ? StatType.Assist
-                : _allHomePlayers.Any(p => p.Id == player.Id)
-                    ? StatType.DefensiveRebound : StatType.OffensiveRebound;
-
-            var ev = new StatEvent
+            switch (FollowUp.Type)
             {
-                GameId = GameId,
-                PlayerId = player.Id,
-                StatType = statType,
-                Quarter = Quarter,
-                GameClock = GameClock,
-                Timestamp = DateTime.UtcNow,
-                LinkedEventId = FollowUp.LinkedEventId
-            };
-            await _statEventRepository.AddAsync(ev);
+                case "steal": // steal → the fouled/robbed opponent's turnover (US-22)
+                    await AddLinkedStatAsync(player, StatType.Turnover, "Turnover", FollowUp.LinkedEventId);
+                    break;
 
-            bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
-            AddLog($"  > #{player.JerseyNumber} {player.Name} — {(isAssist ? "Assist" : "Rebound")}", isHome, ev.Id);
+                case "foul": // foul → free-throw sequence for the fouled player (US-22)
+                    StartFtSequence(player, FollowUp.LinkedEventId);
+                    break;
+
+                case "assist":
+                    await AddLinkedStatAsync(player, StatType.Assist, "Assist", FollowUp.LinkedEventId);
+                    break;
+
+                default: // rebound
+                    var rebType = _allHomePlayers.Any(p => p.Id == player.Id)
+                        ? StatType.DefensiveRebound : StatType.OffensiveRebound;
+                    await AddLinkedStatAsync(player, rebType, "Rebound", FollowUp.LinkedEventId);
+                    break;
+            }
         }
 
         ClearFollowUp();
+    }
+
+    /// <summary>Records a non-shot stat for a player, linked to the triggering event, and logs it.</summary>
+    private async Task AddLinkedStatAsync(Player player, StatType statType, string label, int linkedEventId)
+    {
+        var ev = new StatEvent
+        {
+            GameId = GameId,
+            PlayerId = player.Id,
+            StatType = statType,
+            Quarter = Quarter,
+            GameClock = GameClock,
+            Timestamp = DateTime.UtcNow,
+            LinkedEventId = linkedEventId
+        };
+        await _statEventRepository.AddAsync(ev);
+
+        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
+        AddLog($"  > #{player.JerseyNumber} {player.Name} — {label}", isHome, ev.Id);
     }
 
     [RelayCommand]
     private void SkipFollowUp()
     {
         ClearFollowUp();
+    }
+
+    // ── Free-throw sequence (US-22) ──
+    private void StartFtSequence(Player shooter, int linkedFoulEventId)
+    {
+        bool isHome = _allHomePlayers.Any(p => p.Id == shooter.Id);
+        FtSequence = new FtSequenceState(shooter, isHome, linkedFoulEventId);
+        UpdateFtSequenceText();
+    }
+
+    private void UpdateFtSequenceText()
+    {
+        if (FtSequence is null) { FtSequenceText = string.Empty; return; }
+        var s = FtSequence;
+        FtSequenceText = s.Attempts == 0
+            ? $"FREE THROWS — #{s.Shooter.JerseyNumber} {s.Shooter.Name}"
+            : $"#{s.Shooter.JerseyNumber} {s.Shooter.Name} — {s.Made}/{s.Attempts} FT";
+    }
+
+    /// <summary>Records one free throw for the fouled player, linked to the foul. Each attempt
+    /// is its own event, so undo walks the sequence back one at a time (US-22).</summary>
+    [RelayCommand]
+    private async Task FtSequenceShotAsync(bool made)
+    {
+        if (FtSequence is null) return;
+        var s = FtSequence;
+
+        var ev = new StatEvent
+        {
+            GameId = GameId,
+            PlayerId = s.Shooter.Id,
+            StatType = StatType.FreeThrow,
+            ShotResult = made ? ShotResult.Made : ShotResult.Missed,
+            Quarter = Quarter,
+            GameClock = GameClock,
+            Timestamp = DateTime.UtcNow,
+            LinkedEventId = s.LinkedFoulEventId
+        };
+        await _statEventRepository.AddAsync(ev);
+
+        s.Attempts++;
+        if (made)
+        {
+            s.Made++;
+            if (s.ShooterIsHome) HomeScore += 1; else AwayScore += 1;
+            RegisterScore(s.ShooterIsHome, 1);
+        }
+
+        AddLog($"  > #{s.Shooter.JerseyNumber} {s.Shooter.Name} — FT {(made ? "Made" : "Miss")}", s.ShooterIsHome, ev.Id);
+        UpdateFtSequenceText();
+    }
+
+    [RelayCommand]
+    private void FtSequenceDone()
+    {
+        FtSequence = null;
+        FtSequenceText = string.Empty;
     }
 
     // ── Quick stats ──
@@ -725,13 +823,18 @@ public partial class GameScoringViewModel : ObservableObject
         if (statId is "pf" or "tech")
         {
             await RecomputeFoulsAsync();
+            // Personal fouls flow into an optional "fouled who? → free throws" sequence (US-22).
+            if (statId == "pf") SetFollowUp("foul", ev.Id);
             // Nudge a substitution the moment a player fouls out (FIBA: 5 personal/technical).
             if (SelectedPlayer is not null && PlayerFouls.GetValueOrDefault(SelectedPlayer.Id) >= 5)
-            {
                 ActionRecorded?.Invoke($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} fouled out — substitute");
-                return;
-            }
+            else
+                ActionRecorded?.Invoke(DescribeEvent(ev));
+            return;
         }
+
+        // A steal flows into an optional "turnover by?" prompt for the opponent (US-22).
+        if (statId == "stl") SetFollowUp("steal", ev.Id);
 
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
@@ -1173,6 +1276,7 @@ public partial class GameScoringViewModel : ObservableObject
         SelectedPlayer = null;
         PendingShot = null;
         FollowUp = null;
+        FtSequence = null;
     }
 
     // ── Helpers ──
@@ -1264,6 +1368,24 @@ public class FollowUpState
     {
         Type = type;
         LinkedEventId = linkedEventId;
+    }
+}
+
+/// <summary>An in-progress free-throw sequence after a foul (US-22): the fouled shooter and
+/// the foul it links to, plus a running made/attempts tally.</summary>
+public class FtSequenceState
+{
+    public Player Shooter { get; }
+    public bool ShooterIsHome { get; }
+    public int LinkedFoulEventId { get; }
+    public int Made { get; set; }
+    public int Attempts { get; set; }
+
+    public FtSequenceState(Player shooter, bool shooterIsHome, int linkedFoulEventId)
+    {
+        Shooter = shooter;
+        ShooterIsHome = shooterIsHome;
+        LinkedFoulEventId = linkedFoulEventId;
     }
 }
 
