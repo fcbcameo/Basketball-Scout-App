@@ -122,6 +122,10 @@ public class PdfReportService
 
         var flow = ComputeGameFlow(events, homeIds, awayIds, format);
 
+        // Zone heat (US-23): each team page shows that team's shooting by zone.
+        var homeZones = await _statsService.GetGameZoneStatsAsync(gameId, homeIds);
+        var awayZones = await _statsService.GetGameZoneStatsAsync(gameId, awayIds);
+
         var homeColor = XColor.FromArgb(0xE8, 0x5D, 0x26); // accent
         var awayColor = XColor.FromArgb(0x30, 0x70, 0xD0); // blue
 
@@ -145,7 +149,8 @@ public class PdfReportService
             homeTeamName: box.HomeTeamName,
             homeColor: homeColor,
             awayColor: awayColor,
-            format: format);
+            format: format,
+            zones: awayZones);
 
         // Page 2: Home team
         DrawTeamPage(doc,
@@ -161,7 +166,8 @@ public class PdfReportService
             homeTeamName: box.HomeTeamName,
             homeColor: homeColor,
             awayColor: awayColor,
-            format: format);
+            format: format,
+            zones: homeZones);
 
         // Page 3: Summary comparison
         DrawSummaryPage(doc, box, events, homeIds, awayIds);
@@ -191,7 +197,8 @@ public class PdfReportService
         string homeTeamName,
         XColor homeColor,
         XColor awayColor,
-        GameFormat format)
+        GameFormat format,
+        IReadOnlyList<ZoneStat> zones)
     {
         var page = AddPage(doc);
         var gfx = XGraphics.FromPdfPage(page);
@@ -227,9 +234,49 @@ public class PdfReportService
         double tableY = bannerY + 65;
         tableY = DrawGameBoxScoreTable(gfx, tableY, W, lines);
 
+        // ── Shooting by zone (US-23) ──
+        tableY += 8;
+        tableY = DrawZoneStrip(gfx, Margin, tableY, W - Margin * 2, zones);
+
         // ── Mini shot charts grid ──
         tableY += 8;
         DrawMiniShotChartsGrid(gfx, tableY, W, H - Margin - tableY, roster, events);
+    }
+
+    // ── Zone heat strip ───────────────────────────────────────────────────────
+
+    private static double DrawZoneStrip(XGraphics gfx, double x, double y, double width,
+        IReadOnlyList<ZoneStat> zones)
+    {
+        gfx.DrawString("SHOOTING BY ZONE", TableLabelFont, new XSolidBrush(TextPrimary), x, y + 8);
+        y += 12;
+
+        if (zones.Count == 0) return y;
+
+        double cellH = 30;
+        double cellW = width / zones.Count;
+        for (int i = 0; i < zones.Count; i++)
+        {
+            var z = zones[i];
+            double cx = x + i * cellW;
+            gfx.DrawRectangle(new XSolidBrush(ParseHex(z.HeatColor)), cx, y, cellW - 2, cellH);
+            gfx.DrawRectangle(new XPen(LineDark, 0.3), cx, y, cellW - 2, cellH);
+
+            var brush = new XSolidBrush(z.HasShots ? XColors.White : TextSecondary);
+            gfx.DrawString(z.Label, TinyFont, brush, new XRect(cx, y + 2, cellW - 2, 8), XStringFormats.Center);
+            gfx.DrawString(z.Display, SmallFont, brush, new XRect(cx, y + 11, cellW - 2, 9), XStringFormats.Center);
+            gfx.DrawString(z.PctDisplay, TinyFont, brush, new XRect(cx, y + 21, cellW - 2, 8), XStringFormats.Center);
+        }
+        return y + cellH;
+    }
+
+    private static XColor ParseHex(string hex)
+    {
+        var h = hex.TrimStart('#');
+        return XColor.FromArgb(
+            Convert.ToInt32(h.Substring(0, 2), 16),
+            Convert.ToInt32(h.Substring(2, 2), 16),
+            Convert.ToInt32(h.Substring(4, 2), 16));
     }
 
     // ── Quarter score box ─────────────────────────────────────────────────────

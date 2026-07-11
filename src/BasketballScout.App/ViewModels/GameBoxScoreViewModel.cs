@@ -30,6 +30,19 @@ public partial class GameBoxScoreViewModel : ObservableObject
     public ObservableCollection<PlayerBoxLine> HomeLines { get; } = [];
     public ObservableCollection<PlayerBoxLine> AwayLines { get; } = [];
 
+    // Zone heat charts per team (US-23), with a period filter.
+    public ObservableCollection<ZoneStat> HomeZones { get; } = [];
+    public ObservableCollection<ZoneStat> AwayZones { get; } = [];
+    public ObservableCollection<ZonePeriodOption> ZonePeriods { get; } = [];
+
+    [ObservableProperty]
+    public partial ZonePeriodOption? SelectedZonePeriod { get; set; }
+
+    partial void OnSelectedZonePeriodChanged(ZonePeriodOption? value)
+    {
+        if (GameId > 0 && value is not null) _ = LoadZonesAsync(value.Period);
+    }
+
     public GameBoxScoreViewModel(
         GameStatsService statsService,
         PdfReportService pdfService,
@@ -126,5 +139,46 @@ public partial class GameBoxScoreViewModel : ObservableObject
 
         AwayLines.Clear();
         foreach (var line in box.AwayLines) AwayLines.Add(line);
+
+        await LoadZonesAsync(SelectedZonePeriod?.Period);
+        BuildZonePeriodOptions();
     }
+
+    /// <summary>Loads the team zone charts for the given period (null = whole game).</summary>
+    private async Task LoadZonesAsync(int? period)
+    {
+        var breakdown = await _statsService.GetGameZoneBreakdownAsync(GameId, period);
+
+        HomeZones.Clear();
+        foreach (var z in breakdown.HomeZones) HomeZones.Add(z);
+        AwayZones.Clear();
+        foreach (var z in breakdown.AwayZones) AwayZones.Add(z);
+
+        _regulationPeriods = breakdown.RegulationPeriods;
+        _periodsPresent = breakdown.PeriodsPresent;
+    }
+
+    private int _regulationPeriods = 4;
+    private List<int> _periodsPresent = [];
+
+    /// <summary>Builds the period filter (All + each period that has shots), preserving the
+    /// current selection. Only rebuilt on a full reload, not on filter change.</summary>
+    private void BuildZonePeriodOptions()
+    {
+        int? previous = SelectedZonePeriod?.Period;
+        ZonePeriods.Clear();
+        ZonePeriods.Add(new ZonePeriodOption(null, "All"));
+        foreach (var q in _periodsPresent)
+        {
+            string label = q <= _regulationPeriods ? $"Q{q}" : $"OT{q - _regulationPeriods}";
+            ZonePeriods.Add(new ZonePeriodOption(q, label));
+        }
+        SelectedZonePeriod = ZonePeriods.FirstOrDefault(o => o.Period == previous) ?? ZonePeriods[0];
+    }
+}
+
+/// <summary>A choice in the zone-chart period filter. Period null = the whole game.</summary>
+public record ZonePeriodOption(int? Period, string Label)
+{
+    public override string ToString() => Label;
 }

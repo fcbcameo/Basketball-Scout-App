@@ -235,6 +235,37 @@ public class GameStatsService
         return AggregateZones(shots);
     }
 
+    /// <summary>Home and away zone breakdowns for one game, optionally scoped to a single
+    /// period. Also returns which periods have shots (for a period filter) and the game's
+    /// regulation period count (for OT-correct labels).</summary>
+    public async Task<GameZoneBreakdown> GetGameZoneBreakdownAsync(int gameId, int? period = null)
+    {
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game is null) return new GameZoneBreakdown();
+
+        var homeTeam = await _teamRepository.GetByIdAsync(game.HomeTeamId);
+        var awayTeam = await _teamRepository.GetByIdAsync(game.AwayTeamId);
+        var homeIds = (homeTeam?.Players ?? []).Select(p => p.Id).ToHashSet();
+        var awayIds = (awayTeam?.Players ?? []).Select(p => p.Id).ToHashSet();
+
+        var fgShots = (await _statEventRepository.GetByGameIdAsync(gameId))
+            .Where(IsFieldGoalWithLocation).ToList();
+
+        var periodsPresent = fgShots.Select(e => e.Quarter).Distinct().OrderBy(q => q).ToList();
+
+        IEnumerable<StatEvent> scoped = fgShots;
+        if (period is int p) scoped = scoped.Where(e => e.Quarter == p);
+        var scopedList = scoped.ToList();
+
+        return new GameZoneBreakdown
+        {
+            HomeZones = AggregateZones(scopedList.Where(e => homeIds.Contains(e.PlayerId))),
+            AwayZones = AggregateZones(scopedList.Where(e => awayIds.Contains(e.PlayerId))),
+            PeriodsPresent = periodsPresent,
+            RegulationPeriods = GameFormat.FromGame(game).RegulationPeriods
+        };
+    }
+
     private static bool IsFieldGoalWithLocation(StatEvent e) =>
         (e.StatType == StatType.Points2 || e.StatType == StatType.Points3)
         && e.CourtX.HasValue && e.CourtY.HasValue;
@@ -704,6 +735,16 @@ public class ShotChartPoint
     public float Y { get; set; }
     public bool IsMade { get; set; }
     public bool Is3Pt { get; set; }
+}
+
+/// <summary>Home + away zone breakdown for one game, plus the periods that have shots and
+/// the regulation period count for OT-correct period labels (US-23).</summary>
+public class GameZoneBreakdown
+{
+    public List<ZoneStat> HomeZones { get; set; } = [];
+    public List<ZoneStat> AwayZones { get; set; } = [];
+    public List<int> PeriodsPresent { get; set; } = [];
+    public int RegulationPeriods { get; set; } = 4;
 }
 
 /// <summary>Per-zone shooting line for the zone heat chart (US-23).</summary>
