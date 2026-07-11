@@ -1,5 +1,6 @@
 using BasketballScout.App.ViewModels;
 using BasketballScout.Core.Models;
+using BasketballScout.Services;
 using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
 
@@ -211,13 +212,8 @@ public partial class GameScoringPage : ContentPage
         float x = Math.Clamp((float)(position.Value.X / courtWidth), 0f, 1f);
         float y = Math.Clamp((float)(position.Value.Y / courtHeight), 0f, 1f);
 
-        // 3PT detection matching the JSX mockup logic
-        double xPct = x * 100;
-        double yPct = y * 100;
-        double dx = xPct - 50;
-        double dy = yPct - 90;
-        double dist = Math.Sqrt(dx * dx + dy * dy);
-        bool is3pt = dist > 42 || ((xPct < 12 || xPct > 88) && yPct > 58);
+        // 3PT detection — shared with zone analytics so the live hint can't drift (US-23).
+        bool is3pt = CourtZones.IsThreePointer(x * 100, y * 100);
 
         _vm.CourtTappedCommand.Execute(new ShotPending
         {

@@ -143,6 +143,9 @@ public partial class PlayerStatsViewModel : ObservableObject
 
     public ObservableCollection<ShotChartPoint> ShotChart { get; } = [];
 
+    /// <summary>FG% by court zone for the heat panel (US-23).</summary>
+    public ObservableCollection<ZoneStat> ZoneStats { get; } = [];
+
     private bool _playerLoaded;
     private bool _seasonLoaded;
 
@@ -234,5 +237,10 @@ public partial class PlayerStatsViewModel : ObservableObject
         var shots = await _statsService.GetPlayerShotChartAsync(PlayerId, SeasonId);
         ShotChart.Clear();
         foreach (var shot in shots) ShotChart.Add(shot);
+
+        // Zone heat panel (US-23)
+        var zones = await _statsService.GetPlayerZoneStatsAsync(PlayerId, SeasonId);
+        ZoneStats.Clear();
+        foreach (var z in zones) ZoneStats.Add(z);
     }
 }

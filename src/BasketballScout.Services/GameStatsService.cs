@@ -212,6 +212,50 @@ public class GameStatsService
         return shots;
     }
 
+    // ── Zone analytics (US-23) ──
+
+    /// <summary>FG% by court zone for one player across the season's completed games.</summary>
+    public async Task<List<ZoneStat>> GetPlayerZoneStatsAsync(int playerId, int seasonId)
+    {
+        var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
+        var shots = new List<StatEvent>();
+        foreach (var game in games.Where(g => g.Status == GameStatus.Finished))
+        {
+            var events = await _statEventRepository.GetByGameIdAsync(game.Id);
+            shots.AddRange(events.Where(e => e.PlayerId == playerId && IsFieldGoalWithLocation(e)));
+        }
+        return AggregateZones(shots);
+    }
+
+    /// <summary>FG% by court zone for one team's shots within a single game.</summary>
+    public async Task<List<ZoneStat>> GetGameZoneStatsAsync(int gameId, IReadOnlyCollection<int> teamPlayerIds)
+    {
+        var events = await _statEventRepository.GetByGameIdAsync(gameId);
+        var shots = events.Where(e => teamPlayerIds.Contains(e.PlayerId) && IsFieldGoalWithLocation(e));
+        return AggregateZones(shots);
+    }
+
+    private static bool IsFieldGoalWithLocation(StatEvent e) =>
+        (e.StatType == StatType.Points2 || e.StatType == StatType.Points3)
+        && e.CourtX.HasValue && e.CourtY.HasValue;
+
+    private static List<ZoneStat> AggregateZones(IEnumerable<StatEvent> shots)
+    {
+        var byZone = CourtZones.All.ToDictionary(
+            z => z,
+            z => new ZoneStat { Zone = z, Label = CourtZones.Label(z), Is3Pt = CourtZones.IsThree(z) });
+
+        foreach (var e in shots)
+        {
+            var s = byZone[CourtZones.GetZone(e.CourtX!.Value, e.CourtY!.Value)];
+            s.Attempts++;
+            if (e.ShotResult == ShotResult.Made) s.Made++;
+        }
+
+        // Preserve the display order defined in CourtZones.All.
+        return CourtZones.All.Select(z => byZone[z]).ToList();
+    }
+
     // ── Build per-game metrics (minutes + plus/minus) from sub/scoring events ──
 
     private static GameMetrics ComputeGameMetrics(
@@ -660,4 +704,37 @@ public class ShotChartPoint
     public float Y { get; set; }
     public bool IsMade { get; set; }
     public bool Is3Pt { get; set; }
+}
+
+/// <summary>Per-zone shooting line for the zone heat chart (US-23).</summary>
+public class ZoneStat
+{
+    public CourtZone Zone { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public bool Is3Pt { get; set; }
+    public int Made { get; set; }
+    public int Attempts { get; set; }
+
+    public double Pct => Attempts > 0 ? Made * 100.0 / Attempts : 0;
+    public bool HasShots => Attempts > 0;
+    public string Display => Attempts > 0 ? $"{Made}/{Attempts}" : "—";
+    public string PctDisplay => Attempts > 0 ? $"{Pct:F0}%" : "";
+
+    /// <summary>Cold→hot hex from FG%: grey when there's no data, then blue → amber → red as
+    /// the percentage climbs. Used by both the on-screen chart and (later) the PDF.</summary>
+    public string HeatColor
+    {
+        get
+        {
+            if (Attempts == 0) return "#161616";
+            double t = Math.Clamp(Pct / 100.0, 0, 1);
+            var (r, g, b) = t < 0.5
+                ? Lerp(59, 130, 246, 251, 191, 36, t / 0.5)   // blue → amber
+                : Lerp(251, 191, 36, 239, 68, 68, (t - 0.5) / 0.5); // amber → red
+            return $"#{r:X2}{g:X2}{b:X2}";
+        }
+    }
+
+    private static (int R, int G, int B) Lerp(int r1, int g1, int b1, int r2, int g2, int b2, double t)
+        => ((int)(r1 + (r2 - r1) * t), (int)(g1 + (g2 - g1) * t), (int)(b1 + (b2 - b1) * t));
 }

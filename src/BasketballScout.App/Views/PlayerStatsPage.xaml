@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:BasketballScout.App.ViewModels"
              xmlns:views="clr-namespace:BasketballScout.App.Views"
+             xmlns:svc="clr-namespace:BasketballScout.Services;assembly=BasketballScout.Services"
              x:Class="BasketballScout.App.Views.PlayerStatsPage"
              x:DataType="vm:PlayerStatsViewModel"
              Title="{Binding PlayerName}"
@@ -330,6 +331,46 @@
                         <!-- Shot dots overlay -->
                         <AbsoluteLayout x:Name="ShotChartOverlay" InputTransparent="True" />
                     </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Zone analytics / heat panel (US-23) -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="SHOOTING BY ZONE" FontSize="10" FontAttributes="Bold"
+                               TextColor="#555" CharacterSpacing="2" VerticalOptions="Center" />
+                        <HorizontalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                            <Label Text="cold" FontSize="8" TextColor="#666" VerticalOptions="Center" />
+                            <BoxView WidthRequest="14" HeightRequest="8" Color="#3b82f6" VerticalOptions="Center" />
+                            <BoxView WidthRequest="14" HeightRequest="8" Color="#fbbf24" VerticalOptions="Center" />
+                            <BoxView WidthRequest="14" HeightRequest="8" Color="#ef4444" VerticalOptions="Center" />
+                            <Label Text="hot" FontSize="8" TextColor="#666" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </Grid>
+
+                    <FlexLayout Wrap="Wrap" JustifyContent="Start" Direction="Row"
+                                BindableLayout.ItemsSource="{Binding ZoneStats}">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No shots recorded yet" FontSize="11" TextColor="#444" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:ZoneStat">
+                                <Border WidthRequest="98" Padding="7,6" Margin="0,0,6,6"
+                                        StrokeShape="RoundRectangle 6" Stroke="#222"
+                                        BackgroundColor="{Binding HeatColor}">
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="{Binding Label}" FontSize="9" FontAttributes="Bold"
+                                               TextColor="White" />
+                                        <Label Text="{Binding Display}" FontSize="13" FontAttributes="Bold"
+                                               TextColor="White" />
+                                        <Label Text="{Binding PctDisplay}" FontSize="10" TextColor="#f5f5f5" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </FlexLayout>
                 </VerticalStackLayout>
             </Border>
 
