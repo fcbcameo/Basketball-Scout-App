@@ -40,6 +40,12 @@
                         HeightRequest="36" MinimumHeightRequest="36" MinimumWidthRequest="64" />
                 <Label Text="{Binding PeriodLabel}" FontSize="11" FontAttributes="Bold"
                        TextColor="#888" VerticalOptions="Center" CharacterSpacing="2" />
+                <!-- Scoring run flag (US-25) -->
+                <Border IsVisible="{Binding HasScoringRun}" Padding="6,2" VerticalOptions="Center"
+                        StrokeShape="RoundRectangle 4" Stroke="Transparent" BackgroundColor="#2a1f0a">
+                    <Label Text="{Binding ScoringRunText}" FontSize="10" FontAttributes="Bold"
+                           TextColor="{Binding ScoringRunColor}" CharacterSpacing="1" />
+                </Border>
                 <Border StrokeShape="RoundRectangle 4" Stroke="#1a1a1a" StrokeThickness="1"
                         BackgroundColor="#141414" Padding="8,2" VerticalOptions="Center">
                     <Border.GestureRecognizers>

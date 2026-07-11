@@ -59,6 +59,19 @@ public partial class GameScoringViewModel : ObservableObject
     /// cards (amber at 4, red at 5).</summary>
     public event Action? FoulsChanged;
 
+    // Scoring run (US-25): current streak of unanswered points; surfaced at 8+.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasScoringRun))]
+    [NotifyPropertyChangedFor(nameof(ScoringRunColor))]
+    public partial string ScoringRunText { get; set; } = string.Empty;
+
+    public bool HasScoringRun => ScoringRunText.Length > 0;
+    public string ScoringRunColor => _runIsHome ? HomeTeamColor : AwayTeamColor;
+
+    private bool _runIsHome;
+    private int _runPoints;
+    private const int RunThreshold = 8;
+
     [ObservableProperty]
     public partial string GameClock { get; set; } = "10:00";
 
@@ -304,6 +317,7 @@ public partial class GameScoringViewModel : ObservableObject
             RebuildFromEvents(existing);
             Quarter = Math.Max(1, game.CurrentPeriod);
             RecomputeFouls(existing); // per-period team fouls need the restored Quarter (US-20)
+            RecomputeRun(existing);   // trailing scoring run (US-25)
             _clockSeconds = Math.Clamp(game.ClockSecondsRemaining, 0, PeriodLengthSeconds(Quarter));
             GameClock = FormatClock(_clockSeconds);
             IsClockRunning = false; // always resume paused — never tick while away
@@ -424,6 +438,54 @@ public partial class GameScoringViewModel : ObservableObject
         FoulsChanged?.Invoke();
     }
 
+    // ── Scoring runs (US-25) ──
+    private static int ScoringPoints(StatEvent e)
+    {
+        if (e.ShotResult != ShotResult.Made) return 0;
+        return e.StatType switch
+        {
+            StatType.Points2 => 2,
+            StatType.Points3 => 3,
+            StatType.FreeThrow => 1,
+            _ => 0
+        };
+    }
+
+    /// <summary>Extends the current unanswered run for a live made basket, surfacing it at 8+.</summary>
+    private void RegisterScore(bool isHome, int pts)
+    {
+        if (pts <= 0) return;
+        if (_runPoints > 0 && _runIsHome == isHome) _runPoints += pts;
+        else { _runIsHome = isHome; _runPoints = pts; }
+        ScoringRunText = _runPoints >= RunThreshold ? $"{_runPoints}-0 RUN" : string.Empty;
+    }
+
+    private async Task RecomputeRunAsync()
+    {
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        RecomputeRun(events);
+    }
+
+    /// <summary>Rebuilds the trailing scoring run from the event log (used on resume and after
+    /// any edit), so the run flag stays correct through undo/corrections.</summary>
+    private void RecomputeRun(IReadOnlyList<StatEvent> events)
+    {
+        _runIsHome = false;
+        _runPoints = 0;
+        foreach (var e in events
+            .Where(e => ScoringPoints(e) > 0)
+            .OrderBy(e => _format.ToAbsoluteSeconds(e.Quarter, e.GameClock))
+            .ThenBy(e => e.Id))
+        {
+            bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+            int pts = ScoringPoints(e);
+            if (_runPoints > 0 && _runIsHome == isHome) _runPoints += pts;
+            else { _runIsHome = isHome; _runPoints = pts; }
+        }
+        ScoringRunText = _runPoints >= RunThreshold ? $"{_runPoints}-0 RUN" : string.Empty;
+        OnPropertyChanged(nameof(ScoringRunColor));
+    }
+
     // ── Player selection ──
     [RelayCommand]
     private void SelectPlayer(Player player)
@@ -490,6 +552,7 @@ public partial class GameScoringViewModel : ObservableObject
         if (confirmation.IsMade)
         {
             if (isHome) HomeScore += pts; else AwayScore += pts;
+            RegisterScore(isHome, pts);
             AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Made", isHome, statEvent.Id);
             SetFollowUp("assist", statEvent.Id);
         }
@@ -612,6 +675,7 @@ public partial class GameScoringViewModel : ObservableObject
         if (made)
         {
             if (isHome) HomeScore += 1; else AwayScore += 1;
+            RegisterScore(isHome, 1);
         }
 
         AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — FT {(made ? "Made" : "Miss")}", isHome, ev.Id);
@@ -706,6 +770,7 @@ public partial class GameScoringViewModel : ObservableObject
         if (row is not null) PlayLog.Remove(row);
 
         await RecomputeFoulsAsync(); // team/player fouls are event-derived (US-20)
+        await RecomputeRunAsync();   // scoring run is event-derived (US-25)
 
         ClearFollowUp();
         PendingShot = null;
@@ -810,6 +875,7 @@ public partial class GameScoringViewModel : ObservableObject
         ApplyReversal(e);
         await _statEventRepository.DeleteAsync(e.Id);
         await RecomputeFoulsAsync();
+        await RecomputeRunAsync();
         await RefreshCorrectionsAsync();
     }
 
@@ -864,6 +930,7 @@ public partial class GameScoringViewModel : ObservableObject
             });
         }
 
+        await RecomputeRunAsync();
         await RefreshCorrectionsAsync();
     }
 

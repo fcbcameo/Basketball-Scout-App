@@ -29,6 +29,46 @@
                     CornerRadius="8"
                     HeightRequest="42" />
 
+            <!-- Standings (US-25) -->
+            <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
+                    Stroke="#1a1a1a">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="STANDINGS" FontSize="10" FontAttributes="Bold"
+                           TextColor="#555" CharacterSpacing="2" />
+                    <Grid ColumnDefinitions="*,44,52,48,48" Padding="4,2" BackgroundColor="#141414">
+                        <Label Text="TEAM" FontSize="8" TextColor="#555" FontAttributes="Bold" />
+                        <Label Grid.Column="1" Text="W-L" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="2" Text="PF" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="3" Text="PA" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                        <Label Grid.Column="4" Text="DIFF" FontSize="8" TextColor="#555" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    </Grid>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Standings}" Spacing="0">
+                        <BindableLayout.EmptyView>
+                            <Label Text="No completed games yet" FontSize="11" TextColor="#444"
+                                   HorizontalOptions="Center" Margin="0,8" />
+                        </BindableLayout.EmptyView>
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="svc:TeamStanding">
+                                <Grid ColumnDefinitions="*,44,52,48,48" Padding="4,6"
+                                      BackgroundColor="{Binding RowBackground}">
+                                    <Label Text="{Binding TeamName}" FontSize="11" FontAttributes="Bold"
+                                           TextColor="{Binding TeamColor}" VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="1" Text="{Binding Record}" FontSize="11" FontAttributes="Bold"
+                                           TextColor="White" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="2" Text="{Binding PointsFor}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="3" Text="{Binding PointsAgainst}" FontSize="10"
+                                           TextColor="#aaa" HorizontalTextAlignment="Center" />
+                                    <Label Grid.Column="4" Text="{Binding DiffDisplay}" FontSize="10" FontAttributes="Bold"
+                                           TextColor="#ccc" HorizontalTextAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Games Section -->
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">

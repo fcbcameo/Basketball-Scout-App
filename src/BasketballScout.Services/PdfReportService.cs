@@ -122,6 +122,18 @@ public class PdfReportService
 
         var flow = ComputeGameFlow(events, homeIds, awayIds, format);
 
+        // Biggest unanswered scoring run (US-25), annotated on the flow chart.
+        var runScores = events
+            .Where(e => e.ShotResult == ShotResult.Made &&
+                (e.StatType == StatType.Points2 || e.StatType == StatType.Points3 || e.StatType == StatType.FreeThrow))
+            .Select(e => (
+                AbsSec: format.ToAbsoluteSeconds(e.Quarter, e.GameClock),
+                IsHome: homeIds.Contains(e.PlayerId),
+                Points: e.StatType == StatType.Points3 ? 3 : e.StatType == StatType.Points2 ? 2 : 1))
+            .ToList();
+        var biggestRun = GameStatsService.DetectRuns(runScores, 8)
+            .OrderByDescending(r => r.Points).FirstOrDefault();
+
         // Zone heat (US-23): each team page shows that team's shooting by zone.
         var homeZones = await _statsService.GetGameZoneStatsAsync(gameId, homeIds);
         var awayZones = await _statsService.GetGameZoneStatsAsync(gameId, awayIds);
@@ -150,7 +162,8 @@ public class PdfReportService
             homeColor: homeColor,
             awayColor: awayColor,
             format: format,
-            zones: awayZones);
+            zones: awayZones,
+            biggestRun: biggestRun);
 
         // Page 2: Home team
         DrawTeamPage(doc,
@@ -167,7 +180,8 @@ public class PdfReportService
             homeColor: homeColor,
             awayColor: awayColor,
             format: format,
-            zones: homeZones);
+            zones: homeZones,
+            biggestRun: biggestRun);
 
         // Page 3: Summary comparison
         DrawSummaryPage(doc, box, events, homeIds, awayIds);
@@ -198,7 +212,8 @@ public class PdfReportService
         XColor homeColor,
         XColor awayColor,
         GameFormat format,
-        IReadOnlyList<ZoneStat> zones)
+        IReadOnlyList<ZoneStat> zones,
+        ScoringRun? biggestRun)
     {
         var page = AddPage(doc);
         var gfx = XGraphics.FromPdfPage(page);
@@ -228,7 +243,7 @@ public class PdfReportService
         double flowX = qBoxX + qBoxW + 20;
         double flowW = W - Margin - flowX;
         DrawGameFlowChart(gfx, flowX, qBoxY, flowW, 55,
-            flow, awayTeamName, homeTeamName, awayColor, homeColor, format);
+            flow, awayTeamName, homeTeamName, awayColor, homeColor, format, biggestRun);
 
         // ── Box score table ──
         double tableY = bannerY + 65;
@@ -363,7 +378,7 @@ public class PdfReportService
     private static void DrawGameFlowChart(
         XGraphics gfx, double x, double y, double width, double height,
         List<FlowPoint> flow, string awayName, string homeName,
-        XColor awayColor, XColor homeColor, GameFormat format)
+        XColor awayColor, XColor homeColor, GameFormat format, ScoringRun? biggestRun)
     {
         // Legend + title
         gfx.DrawString("Game Flow", SmallFont, new XSolidBrush(TextSecondary),
@@ -418,6 +433,19 @@ public class PdfReportService
                 new XRect(fx, plotY - 10, sliceW, 8), XStringFormats.Center);
             boundary += periodLen;
             period++;
+        }
+
+        // Biggest scoring run (US-25): shade the run's time span in the scoring team's colour.
+        if (biggestRun is not null && maxSec > 0)
+        {
+            var runColor = biggestRun.IsHome ? homeColor : awayColor;
+            double rx1 = plotX + (biggestRun.StartAbsSec / (double)maxSec) * plotW;
+            double rx2 = plotX + (biggestRun.EndAbsSec / (double)maxSec) * plotW;
+            double rw = Math.Max(2, rx2 - rx1);
+            gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(36, runColor.R, runColor.G, runColor.B)),
+                rx1, plotY, rw, plotH);
+            gfx.DrawString($"{biggestRun.Points}-0 run", TinyFont, new XSolidBrush(runColor),
+                new XRect(rx1 - 12, plotY - 10, rw + 24, 8), XStringFormats.Center);
         }
 
         // Draw both lines
