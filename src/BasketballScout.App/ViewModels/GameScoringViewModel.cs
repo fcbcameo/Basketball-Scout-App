@@ -813,6 +813,60 @@ public partial class GameScoringViewModel : ObservableObject
         await RefreshCorrectionsAsync();
     }
 
+    /// <summary>US-28: flip a shot's made/miss from the play-by-play list. Reverses the old
+    /// score/dot, updates the result, re-applies, and drops the now-invalid linked follow-up
+    /// (an assist off what's now a miss, or a rebound off what's now a make).</summary>
+    [RelayCommand]
+    private async Task ToggleShotResultAsync(CorrectionEntry? entry)
+    {
+        if (entry is null) return;
+        var events = await _statEventRepository.GetByGameIdAsync(GameId);
+        var e = events.FirstOrDefault(x => x.Id == entry.EventId);
+        if (e is null || e.StatType is not (StatType.Points2 or StatType.Points3 or StatType.FreeThrow))
+            return;
+
+        // Reverse the current score/dot, then drop follow-ups that no longer apply.
+        ApplyReversal(e);
+        foreach (var dep in events.Where(x => x.LinkedEventId == e.Id))
+        {
+            ApplyReversal(dep);
+            await _statEventRepository.DeleteAsync(dep.Id);
+        }
+
+        var newResult = e.ShotResult == ShotResult.Made ? ShotResult.Missed : ShotResult.Made;
+        e.ShotResult = newResult;
+        await _statEventRepository.UpdateAsync(e);
+
+        bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+        if (newResult == ShotResult.Made)
+        {
+            int pts = e.StatType switch
+            {
+                StatType.Points2 => 2,
+                StatType.Points3 => 3,
+                StatType.FreeThrow => 1,
+                _ => 0
+            };
+            if (isHome) HomeScore += pts; else AwayScore += pts;
+        }
+
+        // Restore the court dot with the new result (field goals only).
+        if (e.StatType is StatType.Points2 or StatType.Points3 && e.CourtX.HasValue && e.CourtY.HasValue)
+        {
+            ShotChartDots.Add(new ShotDot
+            {
+                EventId = e.Id,
+                PlayerId = e.PlayerId,
+                X = e.CourtX.Value,
+                Y = e.CourtY.Value,
+                IsMade = newResult == ShotResult.Made,
+                Label = e.StatType == StatType.Points3 ? "3" : "2"
+            });
+        }
+
+        await RefreshCorrectionsAsync();
+    }
+
     [RelayCommand]
     private async Task AddFoulAsync(Player? player)
     {
@@ -857,18 +911,22 @@ public partial class GameScoringViewModel : ObservableObject
             .OrderByDescending(e => e.Timestamp)
             .ToList();
 
-        // Recent events (deletable)
+        // Play-by-play: every event, newest first (US-28 — no longer capped at 25).
+        // Shots can be deleted or flipped made/miss; other stats can be deleted.
         RecentEvents.Clear();
-        foreach (var e in realEvents.Take(25))
+        foreach (var e in realEvents)
         {
             bool isHome = _allHomePlayers.Any(p => p.Id == e.PlayerId);
+            bool isShot = e.StatType is StatType.Points2 or StatType.Points3 or StatType.FreeThrow;
             RecentEvents.Add(new CorrectionEntry
             {
                 EventId = e.Id,
                 PlayerLabel = PlayerLabel(e.PlayerId),
                 Description = DescribeStat(e),
                 Meta = $"Q{e.Quarter} {e.GameClock}",
-                Color = isHome ? HomeTeamColor : AwayTeamColor
+                Color = isHome ? HomeTeamColor : AwayTeamColor,
+                IsShot = isShot,
+                ToggleLabel = isShot ? (e.ShotResult == ShotResult.Made ? "→ Miss" : "→ Made") : string.Empty
             });
         }
 
@@ -1102,6 +1160,10 @@ public class CorrectionEntry
     public string Description { get; set; } = string.Empty;
     public string Meta { get; set; } = string.Empty;
     public string Color { get; set; } = "#888";
+    /// <summary>True for FG/FT rows, which offer a made/miss toggle (US-28).</summary>
+    public bool IsShot { get; set; }
+    /// <summary>Toggle button caption, e.g. "→ Miss" when currently made.</summary>
+    public string ToggleLabel { get; set; } = string.Empty;
 }
 
 public class PlayerFoulRow

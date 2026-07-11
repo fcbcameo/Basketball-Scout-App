@@ -547,8 +547,8 @@
 
                             <BoxView HeightRequest="1" Color="#222" Margin="0,8" />
 
-                            <!-- Recent events -->
-                            <Label Text="RECENT EVENTS — TAP ✕ TO DELETE" FontSize="10" FontAttributes="Bold"
+                            <!-- Play-by-play (all events) -->
+                            <Label Text="PLAY-BY-PLAY — ✕ DELETE · → FLIP MADE/MISS" FontSize="10" FontAttributes="Bold"
                                    TextColor="#666" CharacterSpacing="1" Margin="0,0,0,2" />
                             <VerticalStackLayout Spacing="3"
                                                  BindableLayout.ItemsSource="{Binding RecentEvents}">
@@ -556,7 +556,7 @@
                                     <DataTemplate x:DataType="vm:CorrectionEntry">
                                         <Border BackgroundColor="#181818" StrokeShape="RoundRectangle 6"
                                                 Stroke="#222" StrokeThickness="1" Padding="10,5">
-                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
                                                 <Label Text="{Binding PlayerLabel}" FontSize="12" FontAttributes="Bold"
                                                        TextColor="{Binding Color}" VerticalOptions="Center"
                                                        MinimumWidthRequest="96" LineBreakMode="TailTruncation" />
@@ -564,7 +564,14 @@
                                                        TextColor="#ccc" VerticalOptions="Center" />
                                                 <Label Grid.Column="2" Text="{Binding Meta}" FontSize="10"
                                                        TextColor="#555" VerticalOptions="Center" />
-                                                <Button Grid.Column="3" Text="✕" FontSize="15" FontAttributes="Bold"
+                                                <Button Grid.Column="3" Text="{Binding ToggleLabel}"
+                                                        IsVisible="{Binding IsShot}"
+                                                        FontSize="11" FontAttributes="Bold"
+                                                        BackgroundColor="#1a2336" TextColor="#60a5fa" CornerRadius="6"
+                                                        Padding="6,0" MinimumWidthRequest="66" HeightRequest="44"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=ToggleShotResultCommand}"
+                                                        CommandParameter="{Binding .}" />
+                                                <Button Grid.Column="4" Text="✕" FontSize="15" FontAttributes="Bold"
                                                         BackgroundColor="#2a1515" TextColor="#f87171" CornerRadius="6"
                                                         Padding="0" WidthRequest="44" HeightRequest="44"
                                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GameScoringViewModel}}, Path=DeleteEventCommand}"
