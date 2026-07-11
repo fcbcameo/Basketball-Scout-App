@@ -550,7 +550,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 🔄 **US-19** — Import/export integrity: season parity, transactions, preview (implemented; PR open).
 - 🔄 **US-20** — Per-quarter team fouls, bonus & foul-trouble warnings (implemented; PR open).
 - 🔄 **US-21** — Configurable game format (implemented; PR open).
-- 📋 **US-22** — Linked possession flows (planned).
+- 🔄 **US-22** — Linked possession flows: foul→FT sequence + steal→turnover (implemented; PR open). Follow-ups: and-1 on a made shot, block→miss.
 - ✅ **US-23** — Zone-based shot analytics & heat map (PR #42 core + follow-up: player heat panel, box-score team/opponent charts with in-game period filter, PDF zone strip).
 - 🔄 **US-24** — Opponent tendency scout report (implemented; PR open). Works for any roster size, incl. a single placeholder player.
 - 🔄 **US-25** — Season standings & scoring-run detection (implemented; PR open).
@@ -580,7 +580,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 11. **US-24** — opponent scout report (depends on US-23). ✅ *done*
 
 **Phase 4 — reach:**
-12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first).
+12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first). ✅ *foul→FT + steal→turnover done; and-1 / block→miss deferred*
 13. **US-27** — phone-portrait layout.
 14. **US-30** — readability pass.
 

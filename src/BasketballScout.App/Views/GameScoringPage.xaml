@@ -331,6 +331,38 @@
                                     Command="{Binding SkipFollowUpCommand}" />
                         </VerticalStackLayout>
                     </Border>
+
+                    <!-- Layer 6: Free-throw sequence after a foul (US-22) -->
+                    <Border IsVisible="{Binding HasFtSequence}"
+                            Padding="10" Margin="0,0,0,8"
+                            BackgroundColor="#1a1a12"
+                            StrokeShape="RoundRectangle 10"
+                            Stroke="#fbbf2433" StrokeThickness="1"
+                            HorizontalOptions="Center" VerticalOptions="End"
+                            WidthRequest="300"
+                            ZIndex="12">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="{Binding FtSequenceText}" FontSize="10" FontAttributes="Bold"
+                                   TextColor="#fbbf24" CharacterSpacing="1" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                                <Button Text="✓ MADE" FontSize="16" FontAttributes="Bold"
+                                        BackgroundColor="#4ade8018" TextColor="#4ade80"
+                                        BorderColor="#4ade8033" BorderWidth="1"
+                                        CornerRadius="6" Padding="0,14" HeightRequest="52" MinimumHeightRequest="52"
+                                        Clicked="OnFtSeqMadeClicked" />
+                                <Button Grid.Column="1" Text="✗ MISS" FontSize="16" FontAttributes="Bold"
+                                        BackgroundColor="#f8717118" TextColor="#f87171"
+                                        BorderColor="#f8717133" BorderWidth="1"
+                                        CornerRadius="6" Padding="0,14" HeightRequest="52" MinimumHeightRequest="52"
+                                        Clicked="OnFtSeqMissClicked" />
+                            </Grid>
+                            <Button Text="DONE" FontSize="12" FontAttributes="Bold"
+                                    BackgroundColor="#141414" TextColor="#888"
+                                    CornerRadius="6" Padding="14,9"
+                                    HeightRequest="40" MinimumHeightRequest="40"
+                                    Command="{Binding FtSequenceDoneCommand}" />
+                        </VerticalStackLayout>
+                    </Border>
                 </Grid>
 
                 <!-- ── Quick Stat Bar ── -->
