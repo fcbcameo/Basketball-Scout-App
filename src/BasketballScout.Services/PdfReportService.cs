@@ -1311,6 +1311,72 @@ public class PdfReportService
         return stream.ToArray();
     }
 
+    // ── Scout report (US-24) ──────────────────────────────────────────────────
+
+    /// <summary>One-page opponent scouting report for a team over a season. Every figure is a
+    /// team total per game, so it reads correctly for any roster size — including a single
+    /// placeholder player used to stand in for the whole opponent.</summary>
+    public async Task<byte[]> GenerateScoutReportAsync(int teamId, int seasonId)
+    {
+        EnsureFontResolver();
+        var report = await _statsService.GetTeamScoutReportAsync(teamId, seasonId);
+
+        var doc = new PdfDocument();
+        doc.Info.Title = $"Scout Report - {report.TeamName}";
+
+        var ctx = NewPage(doc);
+        double pageWidth = ctx.Page.Width.Point - Margin * 2;
+
+        ctx.Y = DrawTitle(ctx.Gfx,
+            $"Scout Report — {report.TeamName}",
+            $"{report.GamesPlayed} game(s) · {report.Record} · {report.PointsForPg:F1} scored / {report.PointsAgainstPg:F1} allowed per game",
+            Margin, ctx.Y, pageWidth);
+        ctx.Y += 8;
+
+        if (!report.HasData)
+        {
+            ctx.Gfx.DrawString("No completed games recorded for this team yet.",
+                SubtitleFont, new XSolidBrush(TextSecondary), Margin, ctx.Y + 12);
+            using var empty = new MemoryStream();
+            doc.Save(empty, false);
+            return empty.ToArray();
+        }
+
+        // Small-sample caveat so a scout knows how much to trust it.
+        if (report.GamesPlayed < 3)
+        {
+            ctx.Gfx.DrawString($"Small sample — only {report.GamesPlayed} game(s) recorded.",
+                SubtitleFont, new XSolidBrush(TextSecondary), Margin, ctx.Y + 12);
+            ctx.Y += 18;
+        }
+
+        // Scorers (per game). DrawTable self-labels and shows an empty state if needed.
+        DrawTable(ctx, doc, "SCORERS (PER GAME)",
+            ["#", "PLAYER", "PPG", "FG%", "3P%", "FT%", "RPG", "APG"],
+            [24, 150, 42, 46, 46, 46, 42, 42],
+            report.TopScorers,
+            p => new[] { p.JerseyNumber.ToString(), p.PlayerName, p.Ppg, Pct(p.FgPct), Pct(p.Fg3Pct), Pct(p.FtPct), p.Rpg, p.Apg });
+        ctx.Y += 6;
+
+        // Zone tendencies (heat strip).
+        EnsureSpace(ctx, doc, 60);
+        ctx.Y = DrawZoneStrip(ctx.Gfx, Margin, ctx.Y, pageWidth, report.Zones);
+        ctx.Y += 14;
+
+        // Team profile (per game).
+        EnsureSpace(ctx, doc, 40);
+        ctx.Y = DrawSectionHeader(ctx.Gfx, "TEAM PROFILE (PER GAME)", Margin, ctx.Y, pageWidth);
+        string profile =
+            $"REB {report.ReboundsPg:F1}  ({report.OffReboundsPg:F1} off / {report.DefReboundsPg:F1} def)        " +
+            $"AST {report.AssistsPg:F1}        STL {report.StealsPg:F1}        BLK {report.BlocksPg:F1}        TOV {report.TurnoversPg:F1}";
+        ctx.Gfx.DrawString(profile, CellFont, new XSolidBrush(TextPrimary), Margin + 2, ctx.Y + 12);
+        ctx.Y += 18;
+
+        using var stream = new MemoryStream();
+        doc.Save(stream, false);
+        return stream.ToArray();
+    }
+
     // ── Page helpers ─────────────────────────────────────────────────────────
 
     private class PageContext

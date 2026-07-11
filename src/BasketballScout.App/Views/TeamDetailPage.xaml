@@ -76,6 +76,15 @@
                             TextColor="White"
                             FontAttributes="Bold"
                             CornerRadius="8" />
+
+                    <!-- US-24: opponent scout report (available once the team has a completed game) -->
+                    <Button Text="📋 Scout Report PDF"
+                            Command="{Binding ScoutReportCommand}"
+                            IsVisible="{Binding HasFinishedGames}"
+                            BackgroundColor="#1a2336"
+                            TextColor="#60a5fa"
+                            FontAttributes="Bold"
+                            CornerRadius="8" />
                 </VerticalStackLayout>
             </Border>
 

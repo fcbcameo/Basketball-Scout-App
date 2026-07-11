@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
+using BasketballScout.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -13,6 +15,13 @@ public partial class TeamDetailViewModel : ObservableObject
     private readonly ITeamRepository _teamRepository;
     private readonly IPlayerRepository _playerRepository;
     private readonly IStatEventRepository _statEventRepository;
+    private readonly IGameRepository _gameRepository;
+    private readonly PdfReportService _pdfService;
+
+    /// <summary>Enables the Scout Report button — only meaningful once the team has a
+    /// completed game to scout (works regardless of roster size, US-24).</summary>
+    [ObservableProperty]
+    public partial bool HasFinishedGames { get; set; }
 
     [ObservableProperty]
     public partial int TeamId { get; set; }
@@ -44,11 +53,15 @@ public partial class TeamDetailViewModel : ObservableObject
     public TeamDetailViewModel(
         ITeamRepository teamRepository,
         IPlayerRepository playerRepository,
-        IStatEventRepository statEventRepository)
+        IStatEventRepository statEventRepository,
+        IGameRepository gameRepository,
+        PdfReportService pdfService)
     {
         _teamRepository = teamRepository;
         _playerRepository = playerRepository;
         _statEventRepository = statEventRepository;
+        _gameRepository = gameRepository;
+        _pdfService = pdfService;
     }
 
     partial void OnTeamIdChanged(int value)
@@ -69,6 +82,11 @@ public partial class TeamDetailViewModel : ObservableObject
         Abbreviation = team.Abbreviation;
         Color = team.Color;
         SeasonId = team.SeasonId;
+
+        // Scout report is available once this team has at least one completed game.
+        var games = await _gameRepository.GetBySeasonIdAsync(team.SeasonId);
+        HasFinishedGames = games.Any(g => g.Status == GameStatus.Finished
+            && (g.HomeTeamId == id || g.AwayTeamId == id));
 
         var players = await _playerRepository.GetByTeamIdAsync(id);
         Players.Clear();
@@ -96,6 +114,37 @@ public partial class TeamDetailViewModel : ObservableObject
     private void SetColor(string color)
     {
         Color = color;
+    }
+
+    /// <summary>US-24: generate a one-page opponent scout report PDF for this team. Works for
+    /// any roster size (even a single placeholder player standing in for the whole opponent).</summary>
+    [RelayCommand]
+    private async Task ScoutReportAsync()
+    {
+        try
+        {
+            var pdf = await _pdfService.GenerateScoutReportAsync(TeamId, SeasonId);
+            var fileName = $"ScoutReport_{MakeFileSafe(Name)}.pdf";
+            var filePath = Path.Combine(FileSystem.CacheDirectory, fileName);
+            await File.WriteAllBytesAsync(filePath, pdf);
+
+            await Launcher.Default.OpenAsync(new OpenFileRequest
+            {
+                Title = $"Scout Report — {Name}",
+                File = new ReadOnlyFile(filePath)
+            });
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Error", $"Failed to generate scout report: {ex.Message}", "OK");
+        }
+    }
+
+    private static string MakeFileSafe(string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
     }
 
     [RelayCommand]
