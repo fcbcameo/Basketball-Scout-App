@@ -551,7 +551,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 🔄 **US-20** — Per-quarter team fouls, bonus & foul-trouble warnings (implemented; PR open).
 - 🔄 **US-21** — Configurable game format (implemented; PR open).
 - 📋 **US-22** — Linked possession flows (planned).
-- 📋 **US-23** — Zone-based shot analytics & heat map (planned).
+- 🔄 **US-23** — Zone-based shot analytics & heat map (core implemented — `CourtZones` + aggregation + player zone heat panel; PR open. Follow-ups: box-score team/opponent zone charts, in-game period filter, PDF export).
 - 📋 **US-24** — Opponent tendency scout report (planned).
 - 📋 **US-25** — Season standings & scoring-run detection (planned).
 - 🔄 **US-26** — One-tap backup & restore (implemented; PR open).
