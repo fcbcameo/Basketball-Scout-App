@@ -114,6 +114,66 @@ public class GameStatsService
         return result;
     }
 
+    /// <summary>League standings for a season (US-25), from Finished games only: W-L(-T),
+    /// points for/against and differential. Ordered by wins, then differential.</summary>
+    public async Task<List<TeamStanding>> GetStandingsAsync(int seasonId)
+    {
+        var summaries = await GetSeasonGameSummariesAsync(seasonId);
+        var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
+
+        var standings = teams.ToDictionary(t => t.Id, t => new TeamStanding
+        {
+            TeamId = t.Id,
+            TeamName = t.Name,
+            TeamAbbr = t.Abbreviation,
+            TeamColor = t.Color
+        });
+
+        foreach (var g in summaries.Where(s => s.IsPlayed))
+        {
+            if (!standings.TryGetValue(g.HomeTeamId, out var home)) continue;
+            if (!standings.TryGetValue(g.AwayTeamId, out var away)) continue;
+
+            home.PointsFor += g.HomeScore; home.PointsAgainst += g.AwayScore;
+            away.PointsFor += g.AwayScore; away.PointsAgainst += g.HomeScore;
+
+            if (g.HomeScore > g.AwayScore) { home.Wins++; away.Losses++; }
+            else if (g.HomeScore < g.AwayScore) { away.Wins++; home.Losses++; }
+            else { home.Ties++; away.Ties++; }
+        }
+
+        return standings.Values
+            .OrderByDescending(s => s.Wins)
+            .ThenByDescending(s => s.Diff)
+            .ThenBy(s => s.TeamName)
+            .ToList();
+    }
+
+    /// <summary>Detects unanswered scoring runs of at least <paramref name="minRun"/> points
+    /// from a time-ordered sequence of made-basket points (US-25). Shared by the live flag
+    /// and the PDF flow-chart annotation.</summary>
+    public static List<ScoringRun> DetectRuns(IEnumerable<(int AbsSec, bool IsHome, int Points)> scores, int minRun)
+    {
+        var runs = new List<ScoringRun>();
+        bool curHome = false;
+        int curPts = 0, curStart = 0, curEnd = 0;
+
+        void Flush()
+        {
+            if (curPts >= minRun)
+                runs.Add(new ScoringRun { IsHome = curHome, Points = curPts, StartAbsSec = curStart, EndAbsSec = curEnd });
+        }
+
+        foreach (var s in scores.OrderBy(x => x.AbsSec))
+        {
+            if (s.Points <= 0) continue;
+            if (curPts > 0 && s.IsHome == curHome) { curPts += s.Points; curEnd = s.AbsSec; }
+            else { Flush(); curHome = s.IsHome; curPts = s.Points; curStart = s.AbsSec; curEnd = s.AbsSec; }
+        }
+        Flush();
+        return runs;
+    }
+
     public async Task<List<PlayerSeasonStats>> GetSeasonStatsAsync(int seasonId)
     {
         var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
@@ -735,6 +795,38 @@ public class ShotChartPoint
     public float Y { get; set; }
     public bool IsMade { get; set; }
     public bool Is3Pt { get; set; }
+}
+
+/// <summary>A team's league standing line for a season (US-25).</summary>
+public class TeamStanding
+{
+    public int TeamId { get; set; }
+    public string TeamName { get; set; } = string.Empty;
+    public string TeamAbbr { get; set; } = string.Empty;
+    public string TeamColor { get; set; } = "#888";
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int Ties { get; set; }
+    public int PointsFor { get; set; }
+    public int PointsAgainst { get; set; }
+
+    public int GamesPlayed => Wins + Losses + Ties;
+    public int Diff => PointsFor - PointsAgainst;
+    public string Record => Ties > 0 ? $"{Wins}-{Losses}-{Ties}" : $"{Wins}-{Losses}";
+    public string DiffDisplay => Diff > 0 ? $"+{Diff}" : Diff.ToString();
+
+    /// <summary>Set when this team is the one selected in the season filter (US-25).</summary>
+    public bool IsHighlighted { get; set; }
+    public string RowBackground => IsHighlighted ? "#1f2937" : "#0e0e0e";
+}
+
+/// <summary>An unanswered scoring run (US-25).</summary>
+public class ScoringRun
+{
+    public bool IsHome { get; set; }
+    public int Points { get; set; }
+    public int StartAbsSec { get; set; }
+    public int EndAbsSec { get; set; }
 }
 
 /// <summary>Home + away zone breakdown for one game, plus the periods that have shots and

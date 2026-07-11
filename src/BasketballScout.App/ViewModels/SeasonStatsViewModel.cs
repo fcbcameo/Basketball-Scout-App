@@ -29,9 +29,11 @@ public partial class SeasonStatsViewModel : ObservableObject
     public ObservableCollection<TeamFilter> TeamFilters { get; } = [];
     public ObservableCollection<GameSummary> Games { get; } = [];
     public ObservableCollection<PlayerSeasonStats> PlayerStats { get; } = [];
+    public ObservableCollection<TeamStanding> Standings { get; } = [];
 
     private List<PlayerSeasonStats> _allStats = [];
     private List<SeasonGameSummary> _allGames = [];
+    private List<TeamStanding> _allStandings = [];
 
     private readonly PdfReportService _pdfService;
     private readonly ImportExportService _importExportService;
@@ -70,6 +72,20 @@ public partial class SeasonStatsViewModel : ObservableObject
         foreach (var s in filtered) PlayerStats.Add(s);
 
         RebuildGamesList();
+        RebuildStandings();
+    }
+
+    /// <summary>Standings always show the whole league; the filtered team's row is
+    /// highlighted so the filter is respected without hiding the table (US-25).</summary>
+    private void RebuildStandings()
+    {
+        int filterTeamId = SelectedTeamFilter?.TeamId ?? 0;
+        Standings.Clear();
+        foreach (var s in _allStandings)
+        {
+            s.IsHighlighted = filterTeamId > 0 && s.TeamId == filterTeamId;
+            Standings.Add(s);
+        }
     }
 
     /// <summary>
@@ -140,6 +156,7 @@ public partial class SeasonStatsViewModel : ObservableObject
             // Per-game summaries (final scores + status) for the matches overview.
             // Must be set before SelectedTeamFilter, whose setter triggers ApplyFilter.
             _allGames = await _statsService.GetSeasonGameSummariesAsync(seasonId);
+            _allStandings = await _statsService.GetStandingsAsync(seasonId);
 
             var teams = await _teamRepository.GetBySeasonIdAsync(seasonId);
 

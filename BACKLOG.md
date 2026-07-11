@@ -553,7 +553,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 📋 **US-22** — Linked possession flows (planned).
 - ✅ **US-23** — Zone-based shot analytics & heat map (PR #42 core + follow-up: player heat panel, box-score team/opponent charts with in-game period filter, PDF zone strip).
 - 📋 **US-24** — Opponent tendency scout report (planned).
-- 📋 **US-25** — Season standings & scoring-run detection (planned).
+- 🔄 **US-25** — Season standings & scoring-run detection (implemented; PR open).
 - 🔄 **US-26** — One-tap backup & restore (implemented; PR open).
 - 📋 **US-27** — Phone-portrait scoring layout (planned).
 - 🔄 **US-28** — Edit/delete any event from the play-by-play log (implemented; PR open).
@@ -576,7 +576,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 7. **US-29** — DbContext hardening (do before adding more concurrent readers). ✅ *done*
 8. **US-23** — zone analytics (foundation for US-24).
 9. **US-28** — play-log editing (small, high convenience). ✅ *done*
-10. **US-25** — standings & runs.
+10. **US-25** — standings & runs. ✅ *done*
 11. **US-24** — opponent scout report (depends on US-23).
 
 **Phase 4 — reach:**
