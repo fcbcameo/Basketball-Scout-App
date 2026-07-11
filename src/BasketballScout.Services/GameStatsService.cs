@@ -326,6 +326,68 @@ public class GameStatsService
         };
     }
 
+    /// <summary>FG% by court zone for one team across the season's completed games.</summary>
+    public async Task<List<ZoneStat>> GetTeamSeasonZoneStatsAsync(int teamId, int seasonId)
+    {
+        var team = await _teamRepository.GetByIdAsync(teamId);
+        var playerIds = (team?.Players ?? new List<Player>()).Select(p => p.Id).ToHashSet();
+
+        var games = await _gameRepository.GetBySeasonIdAsync(seasonId);
+        var shots = new List<StatEvent>();
+        foreach (var game in games.Where(g => g.Status == GameStatus.Finished))
+        {
+            var events = await _statEventRepository.GetByGameIdAsync(game.Id);
+            shots.AddRange(events.Where(e => playerIds.Contains(e.PlayerId) && IsFieldGoalWithLocation(e)));
+        }
+        return AggregateZones(shots);
+    }
+
+    /// <summary>Opponent scout report for one team over a season (US-24). Everything is
+    /// aggregated at the TEAM level (sum of the team's players ÷ games), so it works with any
+    /// roster size — including a single placeholder player standing in for the whole opponent.
+    /// Uses Finished games only and divides by games (never by player count).</summary>
+    public async Task<TeamScoutReport> GetTeamScoutReportAsync(int teamId, int seasonId)
+    {
+        var team = await _teamRepository.GetByIdAsync(teamId);
+        if (team is null) return new TeamScoutReport();
+
+        var standings = await GetStandingsAsync(seasonId);
+        var mine = standings.FirstOrDefault(s => s.TeamId == teamId);
+        int gp = mine?.GamesPlayed ?? 0;
+        double gpDiv = Math.Max(1, gp);
+
+        var allStats = await GetSeasonStatsAsync(seasonId); // Finished games only (US-18)
+        var teamPlayerIds = team.Players.Select(p => p.Id).ToHashSet();
+        var teamPlayers = allStats.Where(s => teamPlayerIds.Contains(s.PlayerId)).ToList();
+
+        var topScorers = teamPlayers
+            .OrderByDescending(s => s.TotalPoints / (double)Math.Max(1, s.GamesPlayed))
+            .ToList();
+
+        var zones = await GetTeamSeasonZoneStatsAsync(teamId, seasonId);
+
+        return new TeamScoutReport
+        {
+            TeamId = teamId,
+            TeamName = team.Name,
+            TeamAbbr = team.Abbreviation,
+            TeamColor = team.Color,
+            GamesPlayed = gp,
+            Record = mine?.Record ?? "0-0",
+            PointsForPg = (mine?.PointsFor ?? 0) / gpDiv,
+            PointsAgainstPg = (mine?.PointsAgainst ?? 0) / gpDiv,
+            TopScorers = topScorers,
+            Zones = zones,
+            ReboundsPg = teamPlayers.Sum(p => p.TotalRebounds) / gpDiv,
+            OffReboundsPg = teamPlayers.Sum(p => p.TotalOffRebounds) / gpDiv,
+            DefReboundsPg = teamPlayers.Sum(p => p.TotalDefRebounds) / gpDiv,
+            AssistsPg = teamPlayers.Sum(p => p.TotalAssists) / gpDiv,
+            StealsPg = teamPlayers.Sum(p => p.TotalSteals) / gpDiv,
+            BlocksPg = teamPlayers.Sum(p => p.TotalBlocks) / gpDiv,
+            TurnoversPg = teamPlayers.Sum(p => p.TotalTurnovers) / gpDiv
+        };
+    }
+
     private static bool IsFieldGoalWithLocation(StatEvent e) =>
         (e.StatType == StatType.Points2 || e.StatType == StatType.Points3)
         && e.CourtX.HasValue && e.CourtY.HasValue;
@@ -818,6 +880,31 @@ public class TeamStanding
     /// <summary>Set when this team is the one selected in the season filter (US-25).</summary>
     public bool IsHighlighted { get; set; }
     public string RowBackground => IsHighlighted ? "#1f2937" : "#0e0e0e";
+}
+
+/// <summary>Opponent scout report (US-24). All figures are team totals per game, so a team
+/// with a single placeholder player reads correctly.</summary>
+public class TeamScoutReport
+{
+    public int TeamId { get; set; }
+    public string TeamName { get; set; } = string.Empty;
+    public string TeamAbbr { get; set; } = string.Empty;
+    public string TeamColor { get; set; } = "#888";
+    public int GamesPlayed { get; set; }
+    public string Record { get; set; } = "0-0";
+    public double PointsForPg { get; set; }
+    public double PointsAgainstPg { get; set; }
+    public List<PlayerSeasonStats> TopScorers { get; set; } = [];
+    public List<ZoneStat> Zones { get; set; } = [];
+    public double ReboundsPg { get; set; }
+    public double OffReboundsPg { get; set; }
+    public double DefReboundsPg { get; set; }
+    public double AssistsPg { get; set; }
+    public double StealsPg { get; set; }
+    public double BlocksPg { get; set; }
+    public double TurnoversPg { get; set; }
+
+    public bool HasData => GamesPlayed > 0;
 }
 
 /// <summary>An unanswered scoring run (US-25).</summary>

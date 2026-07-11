@@ -552,7 +552,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 🔄 **US-21** — Configurable game format (implemented; PR open).
 - 📋 **US-22** — Linked possession flows (planned).
 - ✅ **US-23** — Zone-based shot analytics & heat map (PR #42 core + follow-up: player heat panel, box-score team/opponent charts with in-game period filter, PDF zone strip).
-- 📋 **US-24** — Opponent tendency scout report (planned).
+- 🔄 **US-24** — Opponent tendency scout report (implemented; PR open). Works for any roster size, incl. a single placeholder player.
 - 🔄 **US-25** — Season standings & scoring-run detection (implemented; PR open).
 - 🔄 **US-26** — One-tap backup & restore (implemented; PR open).
 - 📋 **US-27** — Phone-portrait scoring layout (planned).
@@ -577,7 +577,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 8. **US-23** — zone analytics (foundation for US-24).
 9. **US-28** — play-log editing (small, high convenience). ✅ *done*
 10. **US-25** — standings & runs. ✅ *done*
-11. **US-24** — opponent scout report (depends on US-23).
+11. **US-24** — opponent scout report (depends on US-23). ✅ *done*
 
 **Phase 4 — reach:**
 12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first).
