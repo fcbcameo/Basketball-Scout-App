@@ -23,8 +23,8 @@
                            TextColor="{Binding HomeTeamColor}" VerticalOptions="Center" />
                     <Label Text="{Binding HomeScore}" FontSize="24" FontAttributes="Bold"
                            TextColor="White" VerticalOptions="Center" />
-                    <Label Text="{Binding HomeFouls, StringFormat='F:{0}'}" FontSize="9"
-                           TextColor="#555" VerticalOptions="Center" />
+                    <Label Text="{Binding HomeFouls, StringFormat='F:{0}'}" FontSize="10"
+                           TextColor="#9a9a9a" VerticalOptions="Center" />
                     <Label Text="BONUS" FontSize="8" FontAttributes="Bold" TextColor="#fbbf24"
                            CharacterSpacing="1" VerticalOptions="Center"
                            IsVisible="{Binding HomeInBonus}" />
@@ -80,8 +80,8 @@
                     <Label Text="BONUS" FontSize="8" FontAttributes="Bold" TextColor="#fbbf24"
                            CharacterSpacing="1" VerticalOptions="Center"
                            IsVisible="{Binding AwayInBonus}" />
-                    <Label Text="{Binding AwayFouls, StringFormat='F:{0}'}" FontSize="9"
-                           TextColor="#555" VerticalOptions="Center" />
+                    <Label Text="{Binding AwayFouls, StringFormat='F:{0}'}" FontSize="10"
+                           TextColor="#9a9a9a" VerticalOptions="Center" />
                     <Label Text="{Binding AwayScore}" FontSize="24" FontAttributes="Bold"
                            TextColor="White" VerticalOptions="Center" />
                     <Label Text="{Binding AwayTeamAbbr}" FontSize="11" FontAttributes="Bold"
@@ -121,11 +121,11 @@
                                                 CommandParameter="{Binding .}" />
                                         </Border.GestureRecognizers>
                                         <HorizontalStackLayout Spacing="6">
-                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                            <Label Text="{Binding JerseyNumber}" FontSize="{DynamicResource FsRosterNum}" FontAttributes="Bold"
                                                    TextColor="#bbb" VerticalOptions="Center" MinimumWidthRequest="30"
                                                    HorizontalTextAlignment="Center" />
                                             <VerticalStackLayout VerticalOptions="Center">
-                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                <Label Text="{Binding Name}" FontSize="{DynamicResource FsRosterName}" FontAttributes="Bold"
                                                        TextColor="#bbb" LineBreakMode="TailTruncation"
                                                        MaximumWidthRequest="75" />
                                                 <Label Text="{Binding Position}" FontSize="8"
@@ -157,11 +157,11 @@
                                                 CommandParameter="{Binding .}" />
                                         </Border.GestureRecognizers>
                                         <HorizontalStackLayout Spacing="6">
-                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                            <Label Text="{Binding JerseyNumber}" FontSize="{DynamicResource FsRosterNum}" FontAttributes="Bold"
                                                    TextColor="#444" VerticalOptions="Center" MinimumWidthRequest="30"
                                                    HorizontalTextAlignment="Center" />
                                             <VerticalStackLayout VerticalOptions="Center">
-                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                <Label Text="{Binding Name}" FontSize="{DynamicResource FsRosterName}" FontAttributes="Bold"
                                                        TextColor="#555" LineBreakMode="TailTruncation"
                                                        MaximumWidthRequest="75" />
                                                 <Label Text="{Binding Position}" FontSize="8"
@@ -461,11 +461,11 @@
                                                 CommandParameter="{Binding .}" />
                                         </Border.GestureRecognizers>
                                         <HorizontalStackLayout Spacing="6" FlowDirection="RightToLeft">
-                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                            <Label Text="{Binding JerseyNumber}" FontSize="{DynamicResource FsRosterNum}" FontAttributes="Bold"
                                                    TextColor="#bbb" VerticalOptions="Center" MinimumWidthRequest="30"
                                                    HorizontalTextAlignment="Center" />
                                             <VerticalStackLayout VerticalOptions="Center">
-                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                <Label Text="{Binding Name}" FontSize="{DynamicResource FsRosterName}" FontAttributes="Bold"
                                                        TextColor="#bbb" LineBreakMode="TailTruncation"
                                                        MaximumWidthRequest="75" HorizontalTextAlignment="End" />
                                                 <Label Text="{Binding Position}" FontSize="8"
@@ -498,11 +498,11 @@
                                                 CommandParameter="{Binding .}" />
                                         </Border.GestureRecognizers>
                                         <HorizontalStackLayout Spacing="6" FlowDirection="RightToLeft">
-                                            <Label Text="{Binding JerseyNumber}" FontSize="20" FontAttributes="Bold"
+                                            <Label Text="{Binding JerseyNumber}" FontSize="{DynamicResource FsRosterNum}" FontAttributes="Bold"
                                                    TextColor="#444" VerticalOptions="Center" MinimumWidthRequest="30"
                                                    HorizontalTextAlignment="Center" />
                                             <VerticalStackLayout VerticalOptions="Center">
-                                                <Label Text="{Binding Name}" FontSize="10" FontAttributes="Bold"
+                                                <Label Text="{Binding Name}" FontSize="{DynamicResource FsRosterName}" FontAttributes="Bold"
                                                        TextColor="#555" LineBreakMode="TailTruncation"
                                                        MaximumWidthRequest="75" HorizontalTextAlignment="End" />
                                                 <Label Text="{Binding Position}" FontSize="8"
@@ -595,11 +595,11 @@
                                         <Border BackgroundColor="#181818" StrokeShape="RoundRectangle 6"
                                                 Stroke="#222" StrokeThickness="1" Padding="10,5">
                                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
-                                                <Label Text="{Binding PlayerLabel}" FontSize="12" FontAttributes="Bold"
+                                                <Label Text="{Binding PlayerLabel}" FontSize="{DynamicResource FsPlayLog}" FontAttributes="Bold"
                                                        TextColor="{Binding Color}" VerticalOptions="Center"
                                                        MinimumWidthRequest="96" LineBreakMode="TailTruncation" />
-                                                <Label Grid.Column="1" Text="{Binding Description}" FontSize="12"
-                                                       TextColor="#ccc" VerticalOptions="Center" />
+                                                <Label Grid.Column="1" Text="{Binding Description}" FontSize="{DynamicResource FsPlayLog}"
+                                                       TextColor="#ddd" VerticalOptions="Center" />
                                                 <Label Grid.Column="2" Text="{Binding Meta}" FontSize="10"
                                                        TextColor="#555" VerticalOptions="Center" />
                                                 <Button Grid.Column="3" Text="{Binding ToggleLabel}"

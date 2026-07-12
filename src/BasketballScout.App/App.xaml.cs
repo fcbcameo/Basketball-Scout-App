@@ -7,6 +7,7 @@ public partial class App : Application
 	public App()
 	{
 		InitializeComponent();
+		TextSizeSettings.Apply(); // US-30: apply the saved Normal/Large text-size setting
 	}
 
 	protected override Window CreateWindow(IActivationState? activationState)

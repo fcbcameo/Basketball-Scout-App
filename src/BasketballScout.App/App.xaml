@@ -14,6 +14,12 @@
             <converters:NotNullToBoolConverter x:Key="NotNullToBoolConverter" />
             <converters:BoolToColorConverter x:Key="MadeColorConverter" TrueColor="#4caf50" FalseColor="#f44336" />
             <converters:StringEqualConverter x:Key="StringEqualConverter" />
+
+            <!-- Scalable font sizes for the scoring screen (US-30). TextSizeSettings.Apply
+                 overwrites these at runtime for the Normal/Large setting. -->
+            <x:Double x:Key="FsRosterNum">20</x:Double>
+            <x:Double x:Key="FsRosterName">10</x:Double>
+            <x:Double x:Key="FsPlayLog">12</x:Double>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
