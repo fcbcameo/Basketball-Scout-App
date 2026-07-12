@@ -558,7 +558,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 - 📋 **US-27** — Phone-portrait scoring layout (planned).
 - 🔄 **US-28** — Edit/delete any event from the play-by-play log (implemented; PR open).
 - 🔄 **US-29** — DbContext lifetime hardening (implemented; PR open).
-- 📋 **US-30** — Readability & tap-target accessibility pass (planned).
+- 🔄 **US-30** — Readability & tap-target accessibility pass (implemented; PR open).
 
 ## Suggested implementation order (remaining)
 
@@ -582,7 +582,7 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 **Phase 4 — reach:**
 12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first). ✅ *foul→FT + steal→turnover done; and-1 / block→miss deferred*
 13. **US-27** — phone-portrait layout.
-14. **US-30** — readability pass.
+14. **US-30** — readability pass. ✅ *done*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.

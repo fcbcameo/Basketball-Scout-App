@@ -64,6 +64,28 @@
                      BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
                      Margin="0,12" />
 
+            <!-- Display settings (US-30) -->
+            <Label Text="Display"
+                   FontSize="16"
+                   FontAttributes="Bold" />
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Larger text"
+                       FontSize="15"
+                       VerticalOptions="Center" />
+                <Switch Grid.Column="1"
+                        x:Name="LargeTextSwitch"
+                        Toggled="OnLargeTextToggled"
+                        OnColor="#e85d26"
+                        MinimumHeightRequest="44" />
+            </Grid>
+            <Label Text="Bumps up roster names and the play-by-play list for easier reading courtside."
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                     Margin="0,12" />
+
             <Label Text="© Michiel Cornelissis"
                    FontSize="12"
                    TextColor="{AppThemeBinding Light=#888, Dark=#777}"
