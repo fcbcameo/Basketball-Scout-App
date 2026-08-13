@@ -613,6 +613,9 @@ During setup for Three vs Zedelgem: a newly added team or player didn't appear u
 - 🔄 **US-28** — Edit/delete any event from the play-by-play log (implemented; PR open).
 - 🔄 **US-29** — DbContext lifetime hardening (implemented; PR open).
 - 🔄 **US-30** — Readability & tap-target accessibility pass (implemented; PR open).
+- ✅ **US-31** — Fix offensive/defensive rebound classification (PR #49, merged).
+- ✅ **US-32** — Round minutes to the nearest whole minute (PR #51, merged).
+- ✅ **US-33** — Refresh rosters/teams/seasons on navigation, so per-match starters/bench can be set (PR #50, merged).
 
 ## Suggested implementation order (remaining)
 
@@ -637,6 +640,11 @@ During setup for Three vs Zedelgem: a newly added team or player didn't appear u
 12. **US-22** — linked possession flows (biggest UX change; ship foul→FT first). ✅ *foul→FT + steal→turnover done; and-1 / block→miss deferred*
 13. **US-27** — phone-portrait layout.
 14. **US-30** — readability pass. ✅ *done*
+
+**Phase 5 — device-test fixes (Three vs Zedelgem, Aug 2026):**
+15. **US-31** — offensive/defensive rebound classification. Corrects the box-score OREB/DREB split for both teams. ✅ *done*
+16. **US-33** — refresh rosters/teams/seasons on navigation. Fixes the stale-until-relaunch lists and unblocks per-match starters/bench selection. ✅ *done*
+17. **US-32** — round minutes to nearest whole minute (PDF box score). ✅ *done*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
