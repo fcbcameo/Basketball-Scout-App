@@ -14,11 +14,13 @@ public partial class GameBoxScorePage : ContentPage
         BindingContext = viewModel;
     }
 
-    protected override async void OnAppearing()
+    // US-33: use OnNavigatedTo (fires on every navigation, incl. returning from a pushed page)
+    // rather than OnAppearing, which doesn't reliably fire on back-navigation under Shell.
+    protected override async void OnNavigatedTo(NavigatedToEventArgs args)
     {
-        base.OnAppearing();
-        // First appearance is loaded by the gameId query property; refresh on
-        // subsequent appearances (e.g. returning from the stat editor).
+        base.OnNavigatedTo(args);
+        // First navigation is loaded by the gameId query property; refresh on
+        // subsequent navigations (e.g. returning from the stat editor).
         if (_appearedBefore)
             await _vm.ReloadAsync();
         _appearedBefore = true;

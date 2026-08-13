@@ -13,10 +13,12 @@ public partial class SeasonStatsPage : ContentPage
         BindingContext = viewModel;
     }
 
-    protected override async void OnAppearing()
+    // US-33: use OnNavigatedTo (fires on every navigation, incl. returning from a pushed page)
+    // rather than OnAppearing, which doesn't reliably fire on back-navigation under Shell.
+    // Refresh when returning from scoring (a game may have been finished or advanced).
+    protected override async void OnNavigatedTo(NavigatedToEventArgs args)
     {
-        base.OnAppearing();
-        // Refresh when returning from scoring (a game may have been finished or advanced).
+        base.OnNavigatedTo(args);
         await _vm.ReloadAsync();
     }
 }
