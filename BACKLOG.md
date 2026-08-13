@@ -581,6 +581,24 @@ During setup for Three vs Zedelgem: a newly added team or player didn't appear u
 
 ---
 
+## US-34 — Game Setup starters/bench chips don't render 🐞
+**Priority:** High · **Size:** S · **Type:** Bug
+
+**As a** scorer setting up a game, **I want** to see and tap the player chips under STARTERS and BENCH, **so that** I can actually pick each team's lineup.
+
+**Context / repro**
+On device (TestFlight, iPad), after selecting a team the "Home Starters (n/5)" **count** updated but the STARTERS/BENCH areas were **blank** — no player chips at all. This is the real reason lineups couldn't be set courtside (US-33 fixed the data refresh; the chips still didn't draw).
+
+**Acceptance criteria**
+- Selecting a home/away team shows every roster player as a chip under STARTERS or BENCH.
+- Tapping a chip moves it between STARTERS and BENCH and updates the (n/5) count.
+- The section grows with the roster (no clipping, no fixed height) and scrolls with the page.
+
+**Technical notes**
+Root cause: the four lineup lists were `CollectionView`s nested inside the page's `ScrollView`. A `CollectionView` (a virtualizing, self-scrolling control) reports ~0 height inside a `ScrollView`, so the items never draw — the plain `Label` counts still showed, which is why only the chips were missing. Fixed by switching all four to `VerticalStackLayout` + `BindableLayout` (non-virtualized, sizes to content), keeping the same item templates and `ToggleHomePlayer`/`ToggleAwayPlayer` tap commands. Verified in the simulator: chips render and toggle correctly.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -616,6 +634,7 @@ During setup for Three vs Zedelgem: a newly added team or player didn't appear u
 - ✅ **US-31** — Fix offensive/defensive rebound classification (PR #49, merged).
 - ✅ **US-32** — Round minutes to the nearest whole minute (PR #51, merged).
 - ✅ **US-33** — Refresh rosters/teams/seasons on navigation, so per-match starters/bench can be set (PR #50, merged).
+- ✅ **US-34** — Game Setup starters/bench chips now render (CollectionView→BindableLayout inside ScrollView).
 
 ## Suggested implementation order (remaining)
 
@@ -645,6 +664,7 @@ During setup for Three vs Zedelgem: a newly added team or player didn't appear u
 15. **US-31** — offensive/defensive rebound classification. Corrects the box-score OREB/DREB split for both teams. ✅ *done*
 16. **US-33** — refresh rosters/teams/seasons on navigation. Fixes the stale-until-relaunch lists and unblocks per-match starters/bench selection. ✅ *done*
 17. **US-32** — round minutes to nearest whole minute (PDF box score). ✅ *done*
+18. **US-34** — Game Setup starters/bench chips render (CollectionView→BindableLayout). Surfaced on TestFlight; the visible half of the "can't set lineup" report. ✅ *done*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.

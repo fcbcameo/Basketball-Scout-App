@@ -89,9 +89,10 @@
                     <!-- Active -->
                     <Label Text="STARTERS" FontSize="11" FontAttributes="Bold"
                            TextColor="#4caf50" Margin="0,4,0,0" />
-                    <CollectionView ItemsSource="{Binding HomeActivePlayers}"
-                                    EmptyView="No starters selected">
-                        <CollectionView.ItemTemplate>
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding HomeActivePlayers}"
+                                         BindableLayout.EmptyView="No starters selected">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Player">
                                 <Border Padding="10,8" Margin="0,2"
                                         BackgroundColor="#1a4caf50"
@@ -114,15 +115,16 @@
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
 
                     <!-- Bench -->
                     <Label Text="BENCH" FontSize="11" FontAttributes="Bold"
                            TextColor="{AppThemeBinding Light=#999, Dark=#666}" Margin="0,8,0,0" />
-                    <CollectionView ItemsSource="{Binding HomeBenchPlayers}"
-                                    EmptyView="All players are starters">
-                        <CollectionView.ItemTemplate>
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding HomeBenchPlayers}"
+                                         BindableLayout.EmptyView="All players are starters">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Player">
                                 <Border Padding="10,8" Margin="0,2"
                                         BackgroundColor="{AppThemeBinding Light=#f0f0f0, Dark=#222}"
@@ -143,8 +145,8 @@
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
@@ -170,9 +172,10 @@
                     <!-- Active -->
                     <Label Text="STARTERS" FontSize="11" FontAttributes="Bold"
                            TextColor="#4caf50" Margin="0,4,0,0" />
-                    <CollectionView ItemsSource="{Binding AwayActivePlayers}"
-                                    EmptyView="No starters selected">
-                        <CollectionView.ItemTemplate>
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding AwayActivePlayers}"
+                                         BindableLayout.EmptyView="No starters selected">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Player">
                                 <Border Padding="10,8" Margin="0,2"
                                         BackgroundColor="#1a4caf50"
@@ -195,15 +198,16 @@
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
 
                     <!-- Bench -->
                     <Label Text="BENCH" FontSize="11" FontAttributes="Bold"
                            TextColor="{AppThemeBinding Light=#999, Dark=#666}" Margin="0,8,0,0" />
-                    <CollectionView ItemsSource="{Binding AwayBenchPlayers}"
-                                    EmptyView="All players are starters">
-                        <CollectionView.ItemTemplate>
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding AwayBenchPlayers}"
+                                         BindableLayout.EmptyView="All players are starters">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Player">
                                 <Border Padding="10,8" Margin="0,2"
                                         BackgroundColor="{AppThemeBinding Light=#f0f0f0, Dark=#222}"
@@ -224,8 +228,8 @@
                                     </HorizontalStackLayout>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
