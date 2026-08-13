@@ -13,9 +13,12 @@ public partial class TeamDetailPage : ContentPage
         BindingContext = _viewModel;
     }
 
-    protected override async void OnAppearing()
+    // US-33: refresh in OnNavigatedTo, not OnAppearing — under Shell, OnAppearing doesn't reliably
+    // fire when returning after a pushed route is popped, so a player added on the player page
+    // didn't show in the roster until relaunch. OnNavigatedTo fires on every navigation.
+    protected override async void OnNavigatedTo(NavigatedToEventArgs args)
     {
-        base.OnAppearing();
+        base.OnNavigatedTo(args);
         await _viewModel.RefreshPlayersCommand.ExecuteAsync(null);
     }
 }
