@@ -569,14 +569,16 @@ public partial class GameScoringViewModel : ObservableObject
         else
         {
             AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Miss", isHome, statEvent.Id);
-            SetFollowUp("rebound", statEvent.Id);
+            SetFollowUp("rebound", statEvent.Id, isHome);
         }
 
         PendingShot = null;
     }
 
     // ── Follow-up (assist/rebound) ──
-    private void SetFollowUp(string type, int linkedEventId)
+    // shooterIsHome is only meaningful for a "rebound" follow-up: it records which team missed,
+    // so the rebound can be classified offensive (same team) vs defensive (opponent).
+    private void SetFollowUp(string type, int linkedEventId, bool shooterIsHome = false)
     {
         HomeFollowUpCandidates.Clear();
         AwayFollowUpCandidates.Clear();
@@ -619,7 +621,7 @@ public partial class GameScoringViewModel : ObservableObject
         HasAwayFollowUpCandidates = AwayFollowUpCandidates.Count > 0;
         ShowFollowUpDivider = HasHomeFollowUpCandidates && HasAwayFollowUpCandidates;
 
-        FollowUp = new FollowUpState(type, linkedEventId);
+        FollowUp = new FollowUpState(type, linkedEventId, shooterIsHome);
     }
 
     private void ClearFollowUp()
@@ -653,9 +655,10 @@ public partial class GameScoringViewModel : ObservableObject
                     await AddLinkedStatAsync(player, StatType.Assist, "Assist", FollowUp.LinkedEventId);
                     break;
 
-                default: // rebound
-                    var rebType = _allHomePlayers.Any(p => p.Id == player.Id)
-                        ? StatType.DefensiveRebound : StatType.OffensiveRebound;
+                default: // rebound — offensive if the rebounder is on the team that missed, else defensive
+                    bool rebounderIsHome = _allHomePlayers.Any(p => p.Id == player.Id);
+                    var rebType = rebounderIsHome == FollowUp.ShooterIsHome
+                        ? StatType.OffensiveRebound : StatType.DefensiveRebound;
                     await AddLinkedStatAsync(player, rebType, "Rebound", FollowUp.LinkedEventId);
                     break;
             }
@@ -1364,10 +1367,14 @@ public class FollowUpState
 {
     public string Type { get; set; }
     public int LinkedEventId { get; set; }
-    public FollowUpState(string type, int linkedEventId)
+    /// <summary>For a "rebound" follow-up: whether the team that took the missed shot is home.
+    /// Used to classify the rebound as offensive (same team) or defensive (opponent).</summary>
+    public bool ShooterIsHome { get; set; }
+    public FollowUpState(string type, int linkedEventId, bool shooterIsHome = false)
     {
         Type = type;
         LinkedEventId = linkedEventId;
+        ShooterIsHome = shooterIsHome;
     }
 }
 
