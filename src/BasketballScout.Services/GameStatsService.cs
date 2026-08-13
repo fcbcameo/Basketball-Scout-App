@@ -149,6 +149,12 @@ public class GameStatsService
             .ToList();
     }
 
+    /// <summary>Converts a duration in seconds to whole minutes, rounded to the nearest minute
+    /// (ties away from zero) — so 39.8 min shows as 40, not 39 (US-32). Use for whole-minute
+    /// stat displays; the live "MM:SS" clock/box-score stays exact.</summary>
+    public static int ToWholeMinutes(int seconds)
+        => (int)Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero);
+
     /// <summary>Detects unanswered scoring runs of at least <paramref name="minRun"/> points
     /// from a time-ordered sequence of made-basket points (US-25). Shared by the live flag
     /// and the PDF flow-chart annotation.</summary>
@@ -807,7 +813,7 @@ public class PlayerSeasonStats
         GamesWithMinutes > 0 ? (TotalSecondsOnCourt / 60.0 / GamesWithMinutes).ToString("F1") : "—";
 
     public string TotalMinutesDisplay =>
-        GamesWithMinutes > 0 ? $"{TotalSecondsOnCourt / 60}" : "—";
+        GamesWithMinutes > 0 ? $"{GameStatsService.ToWholeMinutes(TotalSecondsOnCourt)}" : "—";
 
     public string PlusMinusDisplay =>
         GamesWithMinutes > 0 ? (TotalPlusMinus >= 0 ? $"+{TotalPlusMinus}" : TotalPlusMinus.ToString()) : "—";
