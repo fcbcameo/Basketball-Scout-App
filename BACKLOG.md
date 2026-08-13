@@ -527,6 +527,60 @@ Mostly a XAML sweep: introduce `DynamicResource`-based font sizes for the handfu
 
 ---
 
+## US-31 — Fix offensive/defensive rebound classification 🐞
+**Priority:** High · **Size:** S · **Type:** Bug
+
+**As a** scorer, **I want** each rebound recorded as offensive or defensive based on which team missed the shot, **so that** my box score and reports show the right OREB/DREB split for both teams.
+
+**Context / repro**
+Match Three vs Zedelgem (8/12/26). The game report inverts the split for both teams: KBBCO Three (home) shows **1 OREB / 38 DREB** and Zedelgem A (away) shows **35 OREB / 1 DREB**. A team that grabs almost only its opponent's misses should show almost all *defensive* rebounds — Three's numbers are swapped, and Zedelgem's are swapped the other way.
+
+**Acceptance criteria**
+- A rebound off a missed shot is classified as **offensive** when the rebounder is on the **same team** as the shooter, and **defensive** when on the **opposing team** — independent of home/away.
+- Holds when either team is home or away, and in both portrait and landscape.
+- The manual OFF/DEF rebound buttons on the stat bar keep their explicit meaning (unchanged).
+- Re-running the Three vs Zedelgem game (or a small reproduction) yields a sensible split (the miss-heavy defending team gets mostly DREB).
+
+**Technical notes**
+Root cause in `GameScoringViewModel.HandleFollowUpAsync` (`GameScoringViewModel.cs:657`): `rebType` is chosen by `_allHomePlayers.Any(...)` — home → `DefensiveRebound`, away → `OffensiveRebound` — a fixed team rule. Replace with a lookup of the linked missed shot (`FollowUp.LinkedEventId` → the shot `StatEvent` → its `PlayerId` → that player's team): same team as shooter ⇒ `OffensiveRebound`, other team ⇒ `DefensiveRebound`. Note: existing recorded games keep their stored (wrong) values unless separately migrated — flag whether a one-off recompute is wanted.
+
+---
+
+## US-32 — Round minutes to the nearest whole minute 🐞
+**Priority:** Medium · **Size:** S · **Type:** Bug
+
+**As a** scorer, **I want** minutes played rounded to the nearest whole minute, **so that** 39.8 shows as 40, not 39.
+
+**Acceptance criteria**
+- Whole-minute displays round **arithmetically to nearest** (39.4 → 39, 39.6 → 40, 39.8 → 40); ties round up.
+- Applied consistently everywhere a whole-minute value is shown — starting with the PDF box-score **MIN** column and the row/totals there.
+- The "MM:SS" detailed minute displays (where used) are left as exact and are unaffected.
+
+**Technical notes**
+`PdfReportService.cs:582` (player row) and `:613` (totals) use integer division `l.SecondsOnCourt / 60`, which truncates. Switch to `(int)Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero)`. Sweep other whole-minute renders (e.g. `PlayerStatsViewModel`, `SeasonDetailViewModel`) for the same truncation; leave the box score's `MinutesDisplay` "MM:SS" (`GameStatsService.cs:732`) as-is.
+
+---
+
+## US-33 — Refresh rosters after add, so per-match starters/bench can be set 🐞
+**Priority:** High · **Size:** M · **Type:** Bug
+
+**As a** scorer setting up a game, **I want** teams and players I just added to appear immediately, **so that** I can pick each team's starters and bench without leaving and re-entering the screen.
+
+**Context / repro**
+During setup for Three vs Zedelgem: a newly added team or player didn't appear until navigating away and back, and starters/bench couldn't be designated — the two are linked (the setup screen held a stale team/player list, so there was nothing to toggle).
+
+**Acceptance criteria**
+- After adding/editing a team, the **Game Setup** team pickers show it without re-navigating.
+- After adding/editing players on a team, those players appear in that team's starters/bench lists in Game Setup without re-navigating.
+- Starter/bench selection works per match: tap moves a player between starters and bench; the "max 5 starters" guard still holds.
+- Confirmed the existing toggle actually records the chosen lineup into the game (on-court 5 at tip-off), and that it's discoverable (clear starters vs bench sections/labels).
+- Scope: **per-match only** — no persistent per-team default lineup in this story.
+
+**Technical notes**
+`GameSetupViewModel.LoadTeamsAsync` runs once on `OnSeasonIdChanged`; returning to the page reuses stale `Team` instances whose `Players` navigation isn't refreshed (`OnSelectedHomeTeamChanged`/`OnSelectedAwayTeamChanged` read `value.Players`). Reload teams+players on page appearance (and/or after the add-player/add-team flows), ensuring `GetBySeasonIdAsync` eager-loads `Players`. Verify the lineup chosen via `ToggleHomePlayer`/`ToggleAwayPlayer` is what seeds the game's on-court set. Investigation-first: confirm the exact stale-data path before settling the fix.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
