@@ -13,6 +13,9 @@
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <converters:NotNullToBoolConverter x:Key="NotNullToBoolConverter" />
             <converters:BoolToColorConverter x:Key="MadeColorConverter" TrueColor="#4caf50" FalseColor="#f44336" />
+            <!-- US-35: SUB button — amber fill + dark text while that team's substitution mode is active. -->
+            <converters:BoolToColorConverter x:Key="SubActiveColorConverter" TrueColor="#fbbf24" FalseColor="#1e1e1e" />
+            <converters:BoolToColorConverter x:Key="SubTextColorConverter" TrueColor="#0a0a0a" FalseColor="#888888" />
             <converters:StringEqualConverter x:Key="StringEqualConverter" />
 
             <!-- Scalable font sizes for the scoring screen (US-30). TextSizeSettings.Apply

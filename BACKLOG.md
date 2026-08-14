@@ -599,6 +599,30 @@ Root cause: the four lineup lists were `CollectionView`s nested inside the page'
 
 ---
 
+## US-35 — In-game substitutions on the scoring screen 🔄
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** scorer during a live match, **I want** to substitute a bench player for an on-court player from the scoring screen, **so that** on-court time (minutes) and +/- stay correct as the game goes on.
+
+**Context**
+The landscape scoring screen already shows each team's on-court five **and** its bench, and a full `SubstituteAsync` engine already exists (swaps the collections and writes `SubOut`+`SubIn` events so minutes/+/- reconstruct). But nothing in the UI ever calls it: every roster row — on-court and bench — is bound only to `SelectPlayerCommand` (select for scoring). So there is no way to make a sub mid-game, and tapping a bench player wrongly lets you log stats for a benched player.
+
+**Approach (agreed):** explicit **SUB mode** per team, two-tap swap — chosen over long-press/drag/contextual because a wrong sub corrupts minutes & +/- for the rest of the match, so scoring vs substituting must be unambiguous.
+
+**Acceptance criteria**
+- Each team column has a **SUB** toggle in its header.
+- Tapping SUB puts that team's column into substitution mode (a hint banner explains: tap the player going **OUT**, then the player coming **IN**); tapping SUB again (or after completing a swap) exits the mode.
+- In sub mode: tap an on-court player to arm them as OUT (highlighted); tap a bench player to bring them IN → the pair swaps, a `SUB: #in in, #out out` play-log entry appears, and the mode exits. Re-tapping the armed OUT player un-arms it.
+- The swap persists `SubOut`+`SubIn` at the current quarter/clock, so box-score minutes and +/- are correct.
+- **Bench players are not selectable for scoring** — outside sub mode, tapping a bench row does nothing (players reach the court only via a sub).
+- On-court headcount is preserved (strictly 1-out/1-in).
+- Only the team whose SUB is active responds to sub taps; the other column is unaffected.
+
+**Technical notes**
+The engine (`GameScoringViewModel.SubstituteAsync(SubstitutionRequest)`) is done and correct — this is a UI/state task. Add sub-mode state (`IsSubMode`, `SubIsHome`, `PendingSubOut`, plus `HomeSubActive`/`AwaySubActive`/`SubHint` for binding), `ToggleHomeSubMode`/`ToggleAwaySubMode` commands, and route `SelectPlayer` to a sub handler while in sub mode (and block bench selection for scoring otherwise). In `GameScoringPage.xaml` add the per-column SUB buttons + hint banner; in the code-behind extend the imperative highlight pass to mark the armed OUT player. Undo intentionally still ignores `SubIn`/`SubOut` (so it never half-reverses a pair); a mistaken sub is corrected by swapping back — a dedicated sub-undo can come later if needed.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -635,6 +659,7 @@ Root cause: the four lineup lists were `CollectionView`s nested inside the page'
 - ✅ **US-32** — Round minutes to the nearest whole minute (PR #51, merged).
 - ✅ **US-33** — Refresh rosters/teams/seasons on navigation, so per-match starters/bench can be set (PR #50, merged).
 - ✅ **US-34** — Game Setup starters/bench chips now render (CollectionView→BindableLayout inside ScrollView).
+- 🔄 **US-35** — In-game substitutions on the scoring screen (in progress).
 
 ## Suggested implementation order (remaining)
 
@@ -665,6 +690,7 @@ Root cause: the four lineup lists were `CollectionView`s nested inside the page'
 16. **US-33** — refresh rosters/teams/seasons on navigation. Fixes the stale-until-relaunch lists and unblocks per-match starters/bench selection. ✅ *done*
 17. **US-32** — round minutes to nearest whole minute (PDF box score). ✅ *done*
 18. **US-34** — Game Setup starters/bench chips render (CollectionView→BindableLayout). Surfaced on TestFlight; the visible half of the "can't set lineup" report. ✅ *done*
+19. **US-35** — in-game substitutions on the scoring screen. UI/state to reach the existing `SubstituteAsync` engine so minutes/+/- stay correct through the match. 🔄 *in progress*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.

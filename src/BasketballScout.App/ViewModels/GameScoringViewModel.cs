@@ -148,6 +148,37 @@ public partial class GameScoringViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsCorrectionsOpen { get; set; }
 
+    // ── In-game substitutions (US-35) ──
+    // Explicit SUB mode: while active for a team, tapping that team's players arms an
+    // OUT then swaps in a bench player, instead of selecting a player to score.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HomeSubActive))]
+    [NotifyPropertyChangedFor(nameof(AwaySubActive))]
+    [NotifyPropertyChangedFor(nameof(SubHint))]
+    public partial bool IsSubMode { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HomeSubActive))]
+    [NotifyPropertyChangedFor(nameof(AwaySubActive))]
+    [NotifyPropertyChangedFor(nameof(SubHint))]
+    public partial bool SubIsHome { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SubHint))]
+    public partial Player? PendingSubOut { get; set; }
+
+    /// <summary>True while the home column is the one in substitution mode (drives its hint banner).</summary>
+    public bool HomeSubActive => IsSubMode && SubIsHome;
+
+    /// <summary>True while the away column is the one in substitution mode.</summary>
+    public bool AwaySubActive => IsSubMode && !SubIsHome;
+
+    /// <summary>Instruction shown while substituting: pick who goes out, then who comes in.</summary>
+    public string SubHint => !IsSubMode ? string.Empty
+        : PendingSubOut is null
+            ? "SUB — tap the player going OUT"
+            : $"#{PendingSubOut.JerseyNumber} OUT — now tap the bench player coming IN";
+
     // ── Collections ──
     public ObservableCollection<Player> HomeOnCourt { get; } = new();
     public ObservableCollection<Player> HomeBench { get; } = new();
@@ -498,9 +529,20 @@ public partial class GameScoringViewModel : ObservableObject
 
     // ── Player selection ──
     [RelayCommand]
-    private void SelectPlayer(Player player)
+    private async Task SelectPlayer(Player player)
     {
+        // In substitution mode a tap arms/completes a swap instead of selecting to score (US-35).
+        if (IsSubMode)
+        {
+            await HandleSubTapAsync(player);
+            return;
+        }
+
         if (FollowUp is not null || FtSequence is not null) return;
+
+        // Bench players aren't selectable for scoring — they only reach the court via a sub (US-35).
+        bool onCourt = HomeOnCourt.Contains(player) || AwayOnCourt.Contains(player);
+        if (!onCourt) return;
 
         if (SelectedPlayer?.Id == player.Id)
         {
@@ -1232,7 +1274,61 @@ public partial class GameScoringViewModel : ObservableObject
     private static string FormatClock(int seconds) =>
         $"{seconds / 60}:{seconds % 60:D2}";
 
-    // ── Substitution ──
+    // ── Substitution (US-35) ──
+    [RelayCommand]
+    private void ToggleHomeSubMode() => ToggleSubMode(true);
+
+    [RelayCommand]
+    private void ToggleAwaySubMode() => ToggleSubMode(false);
+
+    /// <summary>Enter substitution mode for a team (or exit if that team's SUB is already on).
+    /// Clears any scoring selection so a single tap can't both score and substitute.</summary>
+    private void ToggleSubMode(bool isHome)
+    {
+        if (IsSubMode && SubIsHome == isHome)
+        {
+            ExitSubMode();
+            return;
+        }
+        SubIsHome = isHome;
+        IsSubMode = true;
+        PendingSubOut = null;
+        SelectedPlayer = null;
+        PendingShot = null;
+    }
+
+    private void ExitSubMode()
+    {
+        IsSubMode = false;
+        PendingSubOut = null;
+    }
+
+    /// <summary>A roster tap while in sub mode: an on-court player arms as OUT (re-tap to un-arm);
+    /// a bench player then swaps IN. Taps on the team that isn't substituting are ignored.</summary>
+    private async Task HandleSubTapAsync(Player player)
+    {
+        bool isHome = _allHomePlayers.Any(p => p.Id == player.Id);
+        if (isHome != SubIsHome) return;
+
+        var onCourt = isHome ? HomeOnCourt : AwayOnCourt;
+        var bench = isHome ? HomeBench : AwayBench;
+
+        if (onCourt.Contains(player))
+        {
+            PendingSubOut = PendingSubOut?.Id == player.Id ? null : player;
+        }
+        else if (bench.Contains(player) && PendingSubOut is not null)
+        {
+            await SubstituteAsync(new SubstitutionRequest
+            {
+                IsHome = isHome,
+                PlayerOut = PendingSubOut,
+                PlayerIn = player
+            });
+            ExitSubMode();
+        }
+    }
+
     [RelayCommand]
     private async Task SubstituteAsync(SubstitutionRequest sub)
     {
