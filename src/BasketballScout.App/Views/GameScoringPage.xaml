@@ -100,9 +100,23 @@
                   RowDefinitions="Auto,*">
                 <Border StrokeShape="RoundRectangle 0" Stroke="Transparent"
                         BackgroundColor="#0c0c0c" Padding="8,6,8,4">
-                    <Label Text="{Binding HomeTeamName}" FontSize="8" FontAttributes="Bold"
-                           TextColor="{Binding HomeTeamColor}" CharacterSpacing="1.5"
-                           TextTransform="Uppercase" />
+                    <VerticalStackLayout Spacing="3">
+                        <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">
+                            <Label Text="{Binding HomeTeamName}" FontSize="8" FontAttributes="Bold"
+                                   TextColor="{Binding HomeTeamColor}" CharacterSpacing="1.5"
+                                   TextTransform="Uppercase" VerticalOptions="Center" />
+                            <!-- US-35: toggle substitution mode for the home team -->
+                            <Button Grid.Column="1" Text="SUB"
+                                    Command="{Binding ToggleHomeSubModeCommand}"
+                                    FontSize="9" FontAttributes="Bold" Padding="8,0" HeightRequest="24"
+                                    MinimumHeightRequest="24" CornerRadius="6"
+                                    TextColor="{Binding HomeSubActive, Converter={StaticResource SubTextColorConverter}}"
+                                    BackgroundColor="{Binding HomeSubActive, Converter={StaticResource SubActiveColorConverter}}" />
+                        </Grid>
+                        <Label Text="{Binding SubHint}" FontSize="8" FontAttributes="Bold"
+                               TextColor="#fbbf24" LineBreakMode="WordWrap"
+                               IsVisible="{Binding HomeSubActive}" />
+                    </VerticalStackLayout>
                 </Border>
                 <ScrollView Grid.Row="1" Padding="4,0,4,4">
                     <VerticalStackLayout Spacing="0">
@@ -440,9 +454,23 @@
                   RowDefinitions="Auto,*">
                 <Border StrokeShape="RoundRectangle 0" Stroke="Transparent"
                         BackgroundColor="#0c0c0c" Padding="8,6,8,4">
-                    <Label Text="{Binding AwayTeamName}" FontSize="8" FontAttributes="Bold"
-                           TextColor="{Binding AwayTeamColor}" CharacterSpacing="1.5"
-                           TextTransform="Uppercase" HorizontalTextAlignment="End" />
+                    <VerticalStackLayout Spacing="3">
+                        <Grid ColumnDefinitions="Auto,*" VerticalOptions="Center">
+                            <!-- US-35: toggle substitution mode for the away team -->
+                            <Button Text="SUB"
+                                    Command="{Binding ToggleAwaySubModeCommand}"
+                                    FontSize="9" FontAttributes="Bold" Padding="8,0" HeightRequest="24"
+                                    MinimumHeightRequest="24" CornerRadius="6"
+                                    TextColor="{Binding AwaySubActive, Converter={StaticResource SubTextColorConverter}}"
+                                    BackgroundColor="{Binding AwaySubActive, Converter={StaticResource SubActiveColorConverter}}" />
+                            <Label Grid.Column="1" Text="{Binding AwayTeamName}" FontSize="8" FontAttributes="Bold"
+                                   TextColor="{Binding AwayTeamColor}" CharacterSpacing="1.5"
+                                   TextTransform="Uppercase" HorizontalTextAlignment="End" VerticalOptions="Center" />
+                        </Grid>
+                        <Label Text="{Binding SubHint}" FontSize="8" FontAttributes="Bold"
+                               TextColor="#fbbf24" LineBreakMode="WordWrap" HorizontalTextAlignment="End"
+                               IsVisible="{Binding AwaySubActive}" />
+                    </VerticalStackLayout>
                 </Border>
                 <ScrollView Grid.Row="1" Padding="4,0,4,4">
                     <VerticalStackLayout Spacing="0">

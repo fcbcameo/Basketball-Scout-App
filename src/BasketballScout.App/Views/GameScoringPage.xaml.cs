@@ -105,6 +105,12 @@ public partial class GameScoringPage : ContentPage
                 RenderShotDots();
                 UpdateCourtHint();
                 break;
+
+            // US-35: highlight the armed "OUT" player and reflect entering/leaving sub mode.
+            case nameof(GameScoringViewModel.PendingSubOut):
+            case nameof(GameScoringViewModel.IsSubMode):
+                UpdatePlayerHighlighting();
+                break;
         }
     }
 
@@ -125,7 +131,9 @@ public partial class GameScoringPage : ContentPage
     /// </summary>
     private void UpdatePlayerHighlighting()
     {
-        var selectedId = _vm.SelectedPlayer?.Id;
+        // In sub mode the fill-highlight marks the armed "OUT" player instead of a scoring
+        // selection (US-35); otherwise it marks the selected player.
+        var selectedId = _vm.IsSubMode ? _vm.PendingSubOut?.Id : _vm.SelectedPlayer?.Id;
         bool isHome = _vm.IsHomeSelected;
 
         HighlightPanel(HomeOnCourtPanel, selectedId, _vm.HomeTeamColor, isActive: true, _vm.PlayerFouls);
