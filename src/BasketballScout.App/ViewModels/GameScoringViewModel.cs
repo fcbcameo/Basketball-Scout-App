@@ -663,6 +663,15 @@ public partial class GameScoringViewModel : ObservableObject
         HasAwayFollowUpCandidates = AwayFollowUpCandidates.Count > 0;
         ShowFollowUpDivider = HasHomeFollowUpCandidates && HasAwayFollowUpCandidates;
 
+        // US-36: don't open a follow-up that has nobody to pick — e.g. the "Assisted by?" prompt
+        // when a single-player team (usually the opponent) scores. The basket is already recorded;
+        // there's simply no teammate to credit, so skip the prompt instead of forcing a SKIP tap.
+        if (!HasHomeFollowUpCandidates && !HasAwayFollowUpCandidates)
+        {
+            FollowUp = null;
+            return;
+        }
+
         FollowUp = new FollowUpState(type, linkedEventId, shooterIsHome);
     }
 
