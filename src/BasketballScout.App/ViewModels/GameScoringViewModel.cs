@@ -18,6 +18,7 @@ public partial class GameScoringViewModel : ObservableObject
     private readonly IStatEventRepository _statEventRepository;
     private readonly IPlayerRepository _playerRepository;
     private readonly ITeamRepository _teamRepository;
+    private readonly GameStatsService _statsService;
 
     // ── Game state ──
     [ObservableProperty]
@@ -191,6 +192,36 @@ public partial class GameScoringViewModel : ObservableObject
     public ObservableCollection<CorrectionEntry> RecentEvents { get; } = new();
     public ObservableCollection<PlayerFoulRow> FoulRows { get; } = new();
 
+    // ── Live box score (US-37) ──
+    // When the tablet is rotated to portrait the scoring screen shows a read-only live box
+    // score instead of the court. Scoring only happens in landscape, so it's enough to refresh
+    // these lines each time portrait becomes visible.
+    [ObservableProperty]
+    public partial bool IsPortrait { get; set; }
+
+    public ObservableCollection<PlayerBoxLine> HomeBoxLines { get; } = new();
+    public ObservableCollection<PlayerBoxLine> AwayBoxLines { get; } = new();
+
+    partial void OnIsPortraitChanged(bool value)
+    {
+        if (value) _ = RefreshBoxScoreAsync();
+    }
+
+    /// <summary>Rebuilds the live per-player box score from the game's events (same source as the
+    /// post-game PDF box score, so the numbers match). Called when portrait becomes visible.</summary>
+    public async Task RefreshBoxScoreAsync()
+    {
+        if (GameId <= 0) return;
+
+        var box = await _statsService.GetGameBoxScoreAsync(GameId);
+
+        HomeBoxLines.Clear();
+        foreach (var line in box.HomeLines) HomeBoxLines.Add(line);
+
+        AwayBoxLines.Clear();
+        foreach (var line in box.AwayLines) AwayBoxLines.Add(line);
+    }
+
     // ── Query property helpers ──
     // All three query properties must be applied before we can hydrate the rosters,
     // because the home/away active-id strings arrive *after* GameId. Guard with flags
@@ -245,12 +276,14 @@ public partial class GameScoringViewModel : ObservableObject
         IGameRepository gameRepository,
         IStatEventRepository statEventRepository,
         IPlayerRepository playerRepository,
-        ITeamRepository teamRepository)
+        ITeamRepository teamRepository,
+        GameStatsService statsService)
     {
         _gameRepository = gameRepository;
         _statEventRepository = statEventRepository;
         _playerRepository = playerRepository;
         _teamRepository = teamRepository;
+        _statsService = statsService;
 
         _clockTimer.Elapsed += (_, _) => MainThread.BeginInvokeOnMainThread(OnClockTick);
     }

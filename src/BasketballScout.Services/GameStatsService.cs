@@ -734,6 +734,9 @@ public class PlayerBoxLine
     public string Fg2Display => $"{Fg2Made}/{Fg2Attempted}";
     public string FtDisplay => $"{FtMade}/{FtAttempted}";
 
+    // FG% as a short label ("43%" or "—" when no attempts). Used by the live box score (US-37).
+    public string FgPctDisplay => FgAttempted > 0 ? $"{FgPct:F0}%" : "—";
+
     // Minutes display: "MM:SS" or "—" if not tracked
     public string MinutesDisplay => SecondsOnCourt > 0
         ? $"{SecondsOnCourt / 60}:{SecondsOnCourt % 60:D2}"

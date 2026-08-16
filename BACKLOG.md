@@ -700,7 +700,7 @@ The tablet scoring page is landscape-only today with no orientation handling. De
 - ✅ **US-34** — Game Setup starters/bench chips now render (CollectionView→BindableLayout inside ScrollView).
 - ✅ **US-35** — In-game substitutions on the scoring screen (PR #54, merged).
 - 📋 **US-36** — Skip the assist prompt for a single-player team (planned).
-- 📋 **US-37** — Rotate to portrait for a live box score (planned).
+- 🔄 **US-37** — Rotate to portrait for a live box score (implemented on branch).
 
 ## Suggested implementation order (remaining)
 
