@@ -623,6 +623,45 @@ The engine (`GameScoringViewModel.SubstituteAsync(SubstitutionRequest)`) is done
 
 ---
 
+## US-36 — Skip the assist prompt when there's no one to credit ✨
+**Priority:** Medium · **Size:** S · **Type:** Enhancement
+
+**As a** scorer who enters the opponent as a single placeholder player, **I want** no "Assisted by?" prompt when the scoring team has no other player on court, **so that** I don't have to tap SKIP on every made basket.
+
+**Context**
+The scorer typically enters the opponent as one player (focus is on their own team's stats). When that lone player scores, the assist follow-up still pops up — with only a SKIP, because there are no teammates to credit — so every opponent basket costs an extra tap.
+
+**Acceptance criteria**
+- A made shot by a team whose scorer is its **only** on-court player records the basket **without** showing the assist prompt.
+- When there is at least one eligible teammate on court, the assist prompt appears exactly as today.
+- The **rebound** prompt after a miss is unchanged (either team can rebound, so it still has candidates).
+- General rule: a follow-up that would present **zero** selectable players is not shown at all.
+
+**Technical notes**
+In `ConfirmShot`'s made branch, only call `SetFollowUp("assist", …)` when the scorer's on-court team has more than one player (`GameScoringViewModel.cs` ~L567). Cleaner/future-proof alternative: have `SetFollowUp` build the candidate list first and simply not open the follow-up (leave `FollowUp` null) when it's empty — that also guards any other prompt. The popup shows purely on `FollowUp != null` (`GameScoringPage.xaml` L280), so leaving it null is enough.
+
+---
+
+## US-37 — Rotate to portrait for a live box score 📊
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** scorer mid-match, **I want** to flip the tablet to portrait to see a live per-player stats table and flip back to landscape to keep scoring, **so that** I can glance at fouls/points/etc. without leaving the game.
+
+**Approach (agreed):** an **orientation-driven view swap inside the running scoring screen** — no navigation, no reload. Landscape = the court + rosters (as today); portrait = a **read-only** live box score. Rotating is instant and non-destructive: clock, selection and all state stay put, and rotating back lands exactly where you were. Read-only in portrait so a stray tap can't change the game.
+
+**Acceptance criteria**
+- In an in-progress game on a tablet, rotating to **portrait** shows a live per-player table; rotating back to **landscape** restores the scoring screen with all state intact.
+- The table covers **both teams** (own team in full; the single opponent row below), grouped by team, with a compact header keeping **score + quarter + clock** visible.
+- Columns per player: **PTS, REB, AST, PF (fouls), FG (made/att + %), STL, TO, MIN**.
+- Numbers reflect events entered so far and **update as new stats are recorded**.
+- **No scoring input** is possible from the portrait view.
+- Landscape scoring behaviour is otherwise unchanged.
+
+**Technical notes**
+The tablet scoring page is landscape-only today with no orientation handling. Detect orientation in `GameScoringPage` (e.g. `OnSizeAllocated`, width < height ⇒ portrait; or `DeviceDisplay.MainDisplayInfo`) and toggle between the existing court layout and a new portrait stats panel — **same page, same `GameScoringViewModel`**. Build the table from the live events via the existing `GameStatsService.GetGameBoxScoreAsync(gameId)` / `GameBoxScore` model (already used by `GameBoxScoreViewModel`), so in-match numbers match the post-game PDF box score exactly. Recompute when portrait becomes visible and after each new event while it's showing (debounce is fine). Ensure the app/page allows portrait orientation for this screen.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -659,7 +698,9 @@ The engine (`GameScoringViewModel.SubstituteAsync(SubstitutionRequest)`) is done
 - ✅ **US-32** — Round minutes to the nearest whole minute (PR #51, merged).
 - ✅ **US-33** — Refresh rosters/teams/seasons on navigation, so per-match starters/bench can be set (PR #50, merged).
 - ✅ **US-34** — Game Setup starters/bench chips now render (CollectionView→BindableLayout inside ScrollView).
-- 🔄 **US-35** — In-game substitutions on the scoring screen (in progress).
+- ✅ **US-35** — In-game substitutions on the scoring screen (PR #54, merged).
+- 📋 **US-36** — Skip the assist prompt for a single-player team (planned).
+- 📋 **US-37** — Rotate to portrait for a live box score (planned).
 
 ## Suggested implementation order (remaining)
 
@@ -690,7 +731,9 @@ The engine (`GameScoringViewModel.SubstituteAsync(SubstitutionRequest)`) is done
 16. **US-33** — refresh rosters/teams/seasons on navigation. Fixes the stale-until-relaunch lists and unblocks per-match starters/bench selection. ✅ *done*
 17. **US-32** — round minutes to nearest whole minute (PDF box score). ✅ *done*
 18. **US-34** — Game Setup starters/bench chips render (CollectionView→BindableLayout). Surfaced on TestFlight; the visible half of the "can't set lineup" report. ✅ *done*
-19. **US-35** — in-game substitutions on the scoring screen. UI/state to reach the existing `SubstituteAsync` engine so minutes/+/- stay correct through the match. 🔄 *in progress*
+19. **US-35** — in-game substitutions on the scoring screen. UI/state to reach the existing `SubstituteAsync` engine so minutes/+/- stay correct through the match. ✅ *done*
+20. **US-36** — skip the assist prompt for a single-player team. Small courtside-friction fix (opponent entered as one placeholder). 📋 *planned*
+21. **US-37** — rotate to portrait for a live box score. Orientation-driven read-only stats table in the running game; reuses `GetGameBoxScoreAsync`. 📋 *planned*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
