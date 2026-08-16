@@ -37,6 +37,15 @@ public partial class GameScoringPage : ContentPage
 
     private void OnFoulsChanged() => MainThread.BeginInvokeOnMainThread(UpdatePlayerHighlighting);
 
+    // US-37: drive the portrait/landscape swap from the page size. Portrait ⇒ read-only live
+    // box score; landscape ⇒ the court/scoring UI. The VM refreshes the box score when it flips.
+    protected override void OnSizeAllocated(double width, double height)
+    {
+        base.OnSizeAllocated(width, height);
+        if (width > 0 && height > 0)
+            _vm.IsPortrait = height > width;
+    }
+
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
