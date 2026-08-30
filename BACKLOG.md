@@ -662,6 +662,43 @@ The tablet scoring page is landscape-only today with no orientation handling. De
 
 ---
 
+## US-38 — Per-quarter box score tables in the match PDF 📄
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** scout reviewing a match report, **I want** per-quarter box score tables after the full-match sections, **so that** I can see how each player's stats broke down quarter by quarter.
+
+**Scope decisions (confirmed):** full **per-player** detail (same columns as the match box score), **both teams**, appended **after** the existing complete-match sections (which stay exactly as they are).
+
+**Acceptance criteria**
+- The existing match PDF is unchanged; a new **"By quarter"** part is appended at the end.
+- For each **played period** (Q1…Qn per the game format, then any overtime OT1, OT2…), and for **each team**, a full per-player box score table is drawn, filtered to events in that period, with the same columns as the match box score.
+- Each block has a clear heading, e.g. `Q1 — {Team}` / `OT1 — {Team}`.
+- Periods with **no recorded events** are skipped (e.g. a game that ended in Q3 shows no Q4).
+- Reads correctly for a single-player opponent (one row).
+
+**Technical notes**
+Reuse `DrawGameBoxScoreTable` with box lines built from events filtered by `Quarter`. Add a per-period box-score builder — e.g. `GameStatsService.GetQuarterBoxScoreAsync(gameId, period)` or expose a filtered `BuildBoxLines(eventsInPeriod, players, metrics)`. Determine played periods from the distinct `Quarter` values present in the events (respecting `GameFormat.RegulationPeriods` + OT). **Open detail to decide:** per-period **MIN** and **+/-** need per-period metrics (`ComputeGameMetrics` is whole-game) — either compute them per period or show `-` for those two columns in the quarter tables (counting/shooting stats are exact from filtered events regardless). Natural layout: one page per period-per-team (heading + table), mirroring `DrawTeamPage` minus the flow chart / quarter-score box. This can add ~8 pages for a 4-quarter game — acceptable per the owner.
+
+---
+
+## US-39 — Per-quarter shot charts in the match PDF 🎯
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** scout, **I want** per-quarter shot charts (mini charts per player) after the full-match sections, **so that** I can see where each player shot from in each quarter.
+
+**Scope decisions (confirmed):** **mini shot-charts per player** (same look as the current per-team page grid), **both teams**, per played period, appended after the full-match sections. Builds on US-38's per-quarter page scaffolding (same `Q1 — {Team}` blocks).
+
+**Acceptance criteria**
+- Under each per-quarter, per-team block, a **mini-shot-charts-per-player grid** is drawn showing only that player's shots **from that period** (✓ makes / ✗ misses, same styling as today).
+- Both teams; a period with no shots for a team shows the empty grid (or is skipped) — consistent with how the full-match grid handles no-shot players.
+- The existing full-match shot charts (per-team mini grids + summary team charts) are unchanged.
+- Overtime periods included; empty periods skipped (matches US-38).
+
+**Technical notes**
+Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the per-period page from US-38 hosts both the table (US-38) and this grid (US-39), so the two stories converge on one `DrawQuarterPage(period, team)` helper. Shot dots come from `Points2`/`Points3` events with court coords, already handled by the existing grid drawer — just pass the period-filtered event list.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -700,7 +737,9 @@ The tablet scoring page is landscape-only today with no orientation handling. De
 - ✅ **US-34** — Game Setup starters/bench chips now render (CollectionView→BindableLayout inside ScrollView).
 - ✅ **US-35** — In-game substitutions on the scoring screen (PR #54, merged).
 - 📋 **US-36** — Skip the assist prompt for a single-player team (planned).
-- 🔄 **US-37** — Rotate to portrait for a live box score (implemented on branch).
+- ✅ **US-37** — Rotate to portrait for a live box score (PR #57, merged).
+- 📋 **US-38** — Per-quarter box score tables in the match PDF (planned).
+- 📋 **US-39** — Per-quarter shot charts in the match PDF (planned).
 
 ## Suggested implementation order (remaining)
 
@@ -733,7 +772,11 @@ The tablet scoring page is landscape-only today with no orientation handling. De
 18. **US-34** — Game Setup starters/bench chips render (CollectionView→BindableLayout). Surfaced on TestFlight; the visible half of the "can't set lineup" report. ✅ *done*
 19. **US-35** — in-game substitutions on the scoring screen. UI/state to reach the existing `SubstituteAsync` engine so minutes/+/- stay correct through the match. ✅ *done*
 20. **US-36** — skip the assist prompt for a single-player team. Small courtside-friction fix (opponent entered as one placeholder). 📋 *planned*
-21. **US-37** — rotate to portrait for a live box score. Orientation-driven read-only stats table in the running game; reuses `GetGameBoxScoreAsync`. 📋 *planned*
+21. **US-37** — rotate to portrait for a live box score. Orientation-driven read-only stats table in the running game; reuses `GetGameBoxScoreAsync`. ✅ *done*
+
+**Phase 6 — per-quarter match report:**
+22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. 📋 *planned*
+23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. 📋 *planned* — do after US-38.
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
