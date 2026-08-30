@@ -190,6 +190,26 @@ public class PdfReportService
         DrawTurnoversFoulsPage(doc, box.HomeTeamName, homePlayers, events, format);
         DrawTurnoversFoulsPage(doc, box.AwayTeamName, awayPlayers, events, format);
 
+        // Per-quarter box scores (US-38): appended after the complete-match sections above,
+        // which stay unchanged. Only periods that actually have events, in order; each period
+        // gets an away page then a home page (mirroring the match pages). A team with no events
+        // in a period is skipped so quiet quarters don't produce blank pages.
+        var playedPeriods = events.Select(e => e.Quarter).Distinct().OrderBy(q => q).ToList();
+        foreach (var period in playedPeriods)
+        {
+            string periodLabel = period > format.RegulationPeriods
+                ? $"OT{period - format.RegulationPeriods}"
+                : $"Q{period}";
+
+            var awayLines = _statsService.BuildPeriodBoxLines(events, awayPlayers, period);
+            if (awayLines.Count > 0)
+                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.AwayTeamName}", matchup, awayLines);
+
+            var homeLines = _statsService.BuildPeriodBoxLines(events, homePlayers, period);
+            if (homeLines.Count > 0)
+                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.HomeTeamName}", matchup, homeLines);
+        }
+
         using var stream = new MemoryStream();
         doc.Save(stream, false);
         return stream.ToArray();
@@ -256,6 +276,27 @@ public class PdfReportService
         // ── Mini shot charts grid ──
         tableY += 8;
         DrawMiniShotChartsGrid(gfx, tableY, W, H - Margin - tableY, roster, events);
+    }
+
+    // ── Per-quarter box score page (US-38) ─────────────────────────────────────
+    // Same look as the per-team page but scoped to one period: a heading ("Q1 — Team")
+    // and the period-filtered box score table. (US-39 will add the period shot-chart grid.)
+    private static void DrawQuarterTeamPage(
+        PdfDocument doc, string heading, string matchup, IReadOnlyList<PlayerBoxLine> lines)
+    {
+        var page = AddPage(doc);
+        var gfx = XGraphics.FromPdfPage(page);
+        double W = page.Width.Point;
+        double H = page.Height.Point;
+
+        gfx.DrawRectangle(new XSolidBrush(PageBg), 0, 0, W, H);
+
+        double bannerY = Margin;
+        gfx.DrawString(heading, TeamHeadingFont, new XSolidBrush(TextPrimary), Margin, bannerY + 20);
+        gfx.DrawString(matchup, SubtitleFont, new XSolidBrush(TextSecondary), Margin, bannerY + 38);
+
+        double tableY = bannerY + 65;
+        DrawGameBoxScoreTable(gfx, tableY, W, lines);
     }
 
     // ── Zone heat strip ───────────────────────────────────────────────────────

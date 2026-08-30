@@ -575,6 +575,16 @@ public class GameStatsService
             .ToList();
     }
 
+    /// <summary>Per-player box lines for a single period, built from that period's events only (US-38).
+    /// On-court minutes and +/- are left at zero — they aren't tracked per period, so they render as
+    /// "-" in the report — while every counting/shooting stat is exact for the period.</summary>
+    public List<PlayerBoxLine> BuildPeriodBoxLines(
+        IReadOnlyList<StatEvent> events, ICollection<Player> players, int period)
+    {
+        var inPeriod = events.Where(e => e.Quarter == period).ToList();
+        return BuildBoxLines(inPeriod, players, new GameMetrics());
+    }
+
     private static void ApplyStatEventToBox(PlayerBoxLine line, StatEvent e)
     {
         switch (e.StatType)
