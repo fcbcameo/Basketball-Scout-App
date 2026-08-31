@@ -576,13 +576,81 @@ public class GameStatsService
     }
 
     /// <summary>Per-player box lines for a single period, built from that period's events only (US-38).
-    /// On-court minutes and +/- are left at zero — they aren't tracked per period, so they render as
-    /// "-" in the report — while every counting/shooting stat is exact for the period.</summary>
+    /// <paramref name="periodSeconds"/> (from <see cref="ComputePeriodSecondsOnCourt"/>) fills in per-period
+    /// on-court time so MIN can render (US-40); when null, minutes stay "-". +/- is always left at zero.</summary>
     public List<PlayerBoxLine> BuildPeriodBoxLines(
-        IReadOnlyList<StatEvent> events, ICollection<Player> players, int period)
+        IReadOnlyList<StatEvent> events, ICollection<Player> players, int period,
+        IReadOnlyDictionary<(int PlayerId, int Period), int>? periodSeconds = null)
     {
         var inPeriod = events.Where(e => e.Quarter == period).ToList();
-        return BuildBoxLines(inPeriod, players, new GameMetrics());
+        var metrics = new GameMetrics();
+        if (periodSeconds is not null)
+        {
+            foreach (var player in players)
+                if (periodSeconds.TryGetValue((player.Id, period), out var secs) && secs > 0)
+                    metrics.PlayerSecondsOnCourt[player.Id] = secs;
+        }
+        return BuildBoxLines(inPeriod, players, metrics);
+    }
+
+    /// <summary>Seconds each player was on court within each period (US-40), from SubIn/SubOut
+    /// intervals clipped to period windows. Key is (PlayerId, Period). Returns empty when the game
+    /// has no sub events (minutes untracked) — matching whole-game minutes. Summing a player's
+    /// per-period seconds equals their whole-game seconds.</summary>
+    public static Dictionary<(int PlayerId, int Period), int> ComputePeriodSecondsOnCourt(
+        IReadOnlyList<StatEvent> events, GameFormat format)
+    {
+        var result = new Dictionary<(int, int), int>();
+
+        if (!events.Any(e => e.StatType is StatType.SubIn or StatType.SubOut))
+            return result;
+
+        var ordered = events
+            .Select(e => new { Event = e, AbsSec = format.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
+            .OrderBy(x => x.AbsSec)
+            .ThenBy(x => x.Event.Id)
+            .ToList();
+
+        int gameEndSec = ordered.Count > 0 ? ordered[^1].AbsSec : 0;
+        int maxPeriod = events.Count > 0 ? events.Max(e => e.Quarter) : format.RegulationPeriods;
+
+        // On-court intervals (absolute seconds) per player, closing any still-open one at game end.
+        var onSince = new Dictionary<int, int>();
+        var intervals = new Dictionary<int, List<(int Start, int End)>>();
+        foreach (var entry in ordered)
+        {
+            var e = entry.Event;
+            if (e.StatType == StatType.SubIn)
+                onSince[e.PlayerId] = entry.AbsSec;
+            else if (e.StatType == StatType.SubOut && onSince.Remove(e.PlayerId, out var start))
+                AddInterval(intervals, e.PlayerId, start, entry.AbsSec);
+        }
+        foreach (var (playerId, start) in onSince)
+            AddInterval(intervals, playerId, start, gameEndSec);
+
+        // Sum the overlap of each interval with each period's [start, end) window.
+        for (int period = 1; period <= maxPeriod; period++)
+        {
+            int pStart = format.PeriodStartOffsetSeconds(period);
+            int pEnd = pStart + format.PeriodLengthSeconds(period);
+            foreach (var (playerId, list) in intervals)
+            {
+                int secs = 0;
+                foreach (var (s, en) in list)
+                    secs += Math.Max(0, Math.Min(en, pEnd) - Math.Max(s, pStart));
+                if (secs > 0) result[(playerId, period)] = secs;
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddInterval(
+        Dictionary<int, List<(int Start, int End)>> intervals, int playerId, int start, int end)
+    {
+        if (!intervals.TryGetValue(playerId, out var list))
+            intervals[playerId] = list = new List<(int, int)>();
+        list.Add((start, end));
     }
 
     private static void ApplyStatEventToBox(PlayerBoxLine line, StatEvent e)

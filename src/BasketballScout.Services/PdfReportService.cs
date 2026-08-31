@@ -194,6 +194,9 @@ public class PdfReportService
         // which stay unchanged. Only periods that actually have events, in order; each period
         // gets an away page then a home page (mirroring the match pages). A team with no events
         // in a period is skipped so quiet quarters don't produce blank pages.
+        // Per-quarter on-court seconds so the quarter tables can show MIN as MM:SS (US-40).
+        var periodSeconds = GameStatsService.ComputePeriodSecondsOnCourt(events, format);
+
         var playedPeriods = events.Select(e => e.Quarter).Distinct().OrderBy(q => q).ToList();
         foreach (var period in playedPeriods)
         {
@@ -203,12 +206,12 @@ public class PdfReportService
 
             var periodEvents = events.Where(e => e.Quarter == period).ToList();
 
-            var awayLines = _statsService.BuildPeriodBoxLines(events, awayPlayers, period);
+            var awayLines = _statsService.BuildPeriodBoxLines(events, awayPlayers, period, periodSeconds);
             if (awayLines.Count > 0)
                 DrawQuarterTeamPage(doc, $"{periodLabel} — {box.AwayTeamName}", matchup,
                     awayLines, awayPlayers, periodEvents);
 
-            var homeLines = _statsService.BuildPeriodBoxLines(events, homePlayers, period);
+            var homeLines = _statsService.BuildPeriodBoxLines(events, homePlayers, period, periodSeconds);
             if (homeLines.Count > 0)
                 DrawQuarterTeamPage(doc, $"{periodLabel} — {box.HomeTeamName}", matchup,
                     homeLines, homePlayers, periodEvents);
@@ -303,7 +306,7 @@ public class PdfReportService
         gfx.DrawString(matchup, SubtitleFont, new XSolidBrush(TextSecondary), Margin, bannerY + 38);
 
         double tableY = bannerY + 65;
-        tableY = DrawGameBoxScoreTable(gfx, tableY, W, lines);
+        tableY = DrawGameBoxScoreTable(gfx, tableY, W, lines, minutesAsClock: true);
 
         // US-39: per-quarter mini shot charts — each roster player's shots from this period only.
         tableY += 8;
@@ -534,7 +537,8 @@ public class PdfReportService
     // ── Box score table (game) ────────────────────────────────────────────────
 
     private static double DrawGameBoxScoreTable(
-        XGraphics gfx, double startY, double pageWidth, IReadOnlyList<PlayerBoxLine> lines)
+        XGraphics gfx, double startY, double pageWidth, IReadOnlyList<PlayerBoxLine> lines,
+        bool minutesAsClock = false)
     {
         // 28 columns. Widths sum must fit in (pageWidth - 2*Margin) ≈ 732pt.
         double[] cols = [
@@ -584,7 +588,7 @@ public class PdfReportService
         int rowIndex = 0;
         foreach (var line in sorted)
         {
-            y = DrawBoxRow(gfx, x, y, cols, BoxRowValues(line),
+            y = DrawBoxRow(gfx, x, y, cols, BoxRowValues(line, minutesAsClock),
                 altBg: rowIndex % 2 == 1, isFooter: false);
             rowIndex++;
         }
@@ -615,7 +619,7 @@ public class PdfReportService
             totals.SecondsOnCourt = Math.Max(totals.SecondsOnCourt, l.SecondsOnCourt);
         }
         int playedCount = lines.Count(l => l.HasStats || l.SecondsOnCourt > 0) > 0 ? 1 : 0;
-        y = DrawBoxRow(gfx, x, y, cols, TotalsRowValues(totals, playedCount),
+        y = DrawBoxRow(gfx, x, y, cols, TotalsRowValues(totals, playedCount, minutesAsClock),
             altBg: false, isFooter: true);
 
         // Outline
@@ -624,14 +628,21 @@ public class PdfReportService
         return y;
     }
 
-    private static string[] BoxRowValues(PlayerBoxLine l)
+    // MIN cell: whole minutes for the match tables (US-32), or MM:SS for the per-quarter
+    // tables (US-40, where periods are short). "-" when minutes aren't tracked.
+    private static string MinCell(int seconds, bool asClock)
+        => seconds <= 0 ? "-"
+            : asClock ? $"{seconds / 60}:{seconds % 60:D2}"
+            : GameStatsService.ToWholeMinutes(seconds).ToString();
+
+    private static string[] BoxRowValues(PlayerBoxLine l, bool minutesAsClock = false)
     {
         int gp = (l.HasStats || l.SecondsOnCourt > 0) ? 1 : 0;
         return [
             l.JerseyNumber.ToString(),
             l.PlayerName,
             Dash(gp),
-            l.SecondsOnCourt > 0 ? GameStatsService.ToWholeMinutes(l.SecondsOnCourt).ToString() : "-",
+            MinCell(l.SecondsOnCourt, minutesAsClock),
             Dash(l.Points),
             Dash(l.FgMade), Dash(l.FgAttempted), Pct(l.FgPct),
             Dash(l.Fg2Made), Dash(l.Fg2Attempted), Pct(l.Fg2Pct),
@@ -656,13 +667,13 @@ public class PdfReportService
         return result;
     }
 
-    private static string[] TotalsRowValues(PlayerBoxLine totals, int gp)
+    private static string[] TotalsRowValues(PlayerBoxLine totals, int gp, bool minutesAsClock = false)
     {
         return [
             "",
             "TOTALS",
             gp.ToString(),
-            totals.SecondsOnCourt > 0 ? GameStatsService.ToWholeMinutes(totals.SecondsOnCourt).ToString() : "-",
+            MinCell(totals.SecondsOnCourt, minutesAsClock),
             totals.Points.ToString(),
             totals.FgMade.ToString(), totals.FgAttempted.ToString(), Pct(totals.FgPct),
             totals.Fg2Made.ToString(), totals.Fg2Attempted.ToString(), Pct(totals.Fg2Pct),
