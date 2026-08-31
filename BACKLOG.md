@@ -699,6 +699,26 @@ Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the pe
 
 ---
 
+## US-40 — Per-quarter minutes played (MM:SS) in the match PDF ⏱️
+**Priority:** Medium · **Size:** M · **Type:** Enhancement
+
+**As a** scout, **I want** each player's minutes for the quarter shown in the per-quarter box score, **so that** I can see how long everyone played in each period.
+
+**Scope decisions (confirmed):** show per-quarter minutes as **MM:SS** (per-period spans are short, so whole minutes would be too coarse); **no per-quarter +/-** (stays `-`). Builds on US-38's per-quarter tables, which currently show `-` for MIN.
+
+**Acceptance criteria**
+- In the per-quarter box score tables, the **MIN** column shows each player's time on court **within that period**, formatted **MM:SS**.
+- A player on court across a period boundary has their time split correctly between the periods.
+- Sum of a player's per-quarter minutes equals their whole-game minutes (invariant).
+- The whole-match box score MIN column is **unchanged** (still whole minutes per US-32).
+- **+/-** per quarter stays `-`.
+- Games without substitution/lineup events still show `-` per quarter (same limitation as whole-game minutes today).
+
+**Technical notes**
+Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecondsOnCourt(events, format)`), reusing the interval logic from `ComputeGameMetrics`: build each player's on-court intervals in absolute seconds (from `SubIn`/`SubOut`, closing open intervals at game end), then for each period sum the overlap of those intervals with the period's absolute-second window (`[startAbs(p), startAbs(p) + PeriodLengthSeconds(p)]` via `GameFormat`). Feed the result into `BuildPeriodBoxLines` so each line's `SecondsOnCourt` is per-period. Rendering: the PDF box row currently prints MIN as **whole minutes** (`ToWholeMinutes`, US-32); add a per-period mode so the quarter tables print `PlayerBoxLine.MinutesDisplay` (**MM:SS**) instead — e.g. a `minutesAsClock` flag on `DrawGameBoxScoreTable`/`DrawBoxRow`, true only for the quarter pages. Leave `PlusMinus` at 0 (renders `-`).
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -739,7 +759,9 @@ Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the pe
 - 📋 **US-36** — Skip the assist prompt for a single-player team (planned).
 - ✅ **US-37** — Rotate to portrait for a live box score (PR #57, merged).
 - ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
-- 🔄 **US-39** — Per-quarter shot charts in the match PDF (implemented on branch).
+- ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
+- ✅ **US-39** — Per-quarter shot charts in the match PDF (PR #60, merged).
+- 📋 **US-40** — Per-quarter minutes played (MM:SS) in the match PDF (planned).
 
 ## Suggested implementation order (remaining)
 
@@ -777,6 +799,7 @@ Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the pe
 **Phase 6 — per-quarter match report:**
 22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. ✅ *done*
 23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. ✅ *done*
+24. **US-40** — per-quarter minutes (MM:SS) in the per-quarter box score; fills the MIN column US-38 leaves as `-`. Per-period slice of the existing minutes interval logic. 📋 *planned*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
