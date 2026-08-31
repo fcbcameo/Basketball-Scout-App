@@ -201,13 +201,17 @@ public class PdfReportService
                 ? $"OT{period - format.RegulationPeriods}"
                 : $"Q{period}";
 
+            var periodEvents = events.Where(e => e.Quarter == period).ToList();
+
             var awayLines = _statsService.BuildPeriodBoxLines(events, awayPlayers, period);
             if (awayLines.Count > 0)
-                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.AwayTeamName}", matchup, awayLines);
+                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.AwayTeamName}", matchup,
+                    awayLines, awayPlayers, periodEvents);
 
             var homeLines = _statsService.BuildPeriodBoxLines(events, homePlayers, period);
             if (homeLines.Count > 0)
-                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.HomeTeamName}", matchup, homeLines);
+                DrawQuarterTeamPage(doc, $"{periodLabel} — {box.HomeTeamName}", matchup,
+                    homeLines, homePlayers, periodEvents);
         }
 
         using var stream = new MemoryStream();
@@ -278,11 +282,14 @@ public class PdfReportService
         DrawMiniShotChartsGrid(gfx, tableY, W, H - Margin - tableY, roster, events);
     }
 
-    // ── Per-quarter box score page (US-38) ─────────────────────────────────────
-    // Same look as the per-team page but scoped to one period: a heading ("Q1 — Team")
-    // and the period-filtered box score table. (US-39 will add the period shot-chart grid.)
+    // ── Per-quarter box score page (US-38) + mini shot charts (US-39) ──────────
+    // Same look as the per-team page but scoped to one period: a heading ("Q1 — Team"),
+    // the period-filtered box score table, and this team's per-player mini shot charts
+    // built from that period's shots only.
     private static void DrawQuarterTeamPage(
-        PdfDocument doc, string heading, string matchup, IReadOnlyList<PlayerBoxLine> lines)
+        PdfDocument doc, string heading, string matchup,
+        IReadOnlyList<PlayerBoxLine> lines, IReadOnlyList<Player> roster,
+        IReadOnlyList<StatEvent> periodEvents)
     {
         var page = AddPage(doc);
         var gfx = XGraphics.FromPdfPage(page);
@@ -296,7 +303,11 @@ public class PdfReportService
         gfx.DrawString(matchup, SubtitleFont, new XSolidBrush(TextSecondary), Margin, bannerY + 38);
 
         double tableY = bannerY + 65;
-        DrawGameBoxScoreTable(gfx, tableY, W, lines);
+        tableY = DrawGameBoxScoreTable(gfx, tableY, W, lines);
+
+        // US-39: per-quarter mini shot charts — each roster player's shots from this period only.
+        tableY += 8;
+        DrawMiniShotChartsGrid(gfx, tableY, W, H - Margin - tableY, roster, periodEvents);
     }
 
     // ── Zone heat strip ───────────────────────────────────────────────────────

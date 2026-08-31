@@ -738,8 +738,8 @@ Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the pe
 - ✅ **US-35** — In-game substitutions on the scoring screen (PR #54, merged).
 - 📋 **US-36** — Skip the assist prompt for a single-player team (planned).
 - ✅ **US-37** — Rotate to portrait for a live box score (PR #57, merged).
-- 📋 **US-38** — Per-quarter box score tables in the match PDF (planned).
-- 📋 **US-39** — Per-quarter shot charts in the match PDF (planned).
+- ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
+- 🔄 **US-39** — Per-quarter shot charts in the match PDF (implemented on branch).
 
 ## Suggested implementation order (remaining)
 
@@ -775,8 +775,8 @@ Reuse `DrawMiniShotChartsGrid` with events filtered by `Quarter`. Ideally the pe
 21. **US-37** — rotate to portrait for a live box score. Orientation-driven read-only stats table in the running game; reuses `GetGameBoxScoreAsync`. ✅ *done*
 
 **Phase 6 — per-quarter match report:**
-22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. 📋 *planned*
-23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. 📋 *planned* — do after US-38.
+22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. ✅ *done*
+23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. ✅ *done*
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
