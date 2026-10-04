@@ -1206,8 +1206,17 @@ public partial class GameScoringViewModel : ObservableObject
 
     // ── Quarter management ──
     [RelayCommand]
-    private void NextQuarter()
+    private async Task NextQuarter()
     {
+        // US-41: advancing can't be undone, so confirm first — a stray tap on Q+ mid-period
+        // would otherwise jump the clock and reset team fouls.
+        string next = _format.PeriodLabel(Quarter + 1);
+        bool confirm = await Shell.Current.DisplayAlertAsync(
+            _format.IsOvertime(Quarter + 1) ? $"Start {next}?" : $"Advance to {next}?",
+            $"End {PeriodLabel} and start {next}. The clock resets to {FormatClock(PeriodLengthSeconds(Quarter + 1))}.",
+            "Confirm", "Cancel");
+        if (!confirm) return;
+
         // No cap — periods 5+ are overtime (OT1, OT2, …) with a 5:00 clock.
         Quarter++;
         StopClock();
