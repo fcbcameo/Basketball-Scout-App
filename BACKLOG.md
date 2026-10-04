@@ -719,6 +719,83 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 
 ---
 
+## US-41 — Confirm before advancing to the next quarter ⏭️
+**Priority:** Medium · **Size:** S · **Type:** Enhancement
+
+**As a** scorer, **I want** a confirmation when I tap the next-quarter button, **so that** I don't accidentally advance the period mid-game.
+
+**Acceptance criteria**
+- Tapping **Q+** (advance period) shows a confirm dialog (e.g. "Advance to Q2?" / into overtime "Start OT1?") with Confirm / Cancel.
+- Confirm advances the period and resets the clock exactly as today; Cancel does nothing.
+- Applies to regulation and overtime advances.
+- The **END** (finish game) button keeps its own confirmation; this story only adds one to the period-advance action.
+
+**Technical notes**
+`GameScoringViewModel.NextQuarter` (bound to **Q+**) is a synchronous command today; make it async and ask `Shell.Current.DisplayAlertAsync` first. Only on confirm run the existing body (increment `Quarter`, stop + reset the clock, recompute team fouls, save state). Label the next period `Q{n}`, or `OT{n − regulation periods}` when it goes past the regulation periods. There is no automatic period advance at 0:00, so Q+ is the only path to guard.
+
+---
+
+## US-42 — Player availability per match (present/absent) 🙋
+**Priority:** High · **Size:** L · **Type:** Feature
+
+**As a** coach/scorer, **I want** to mark at team level who is present/available for the next match, **so that** absent players don't appear anywhere in that match.
+
+**Scope decisions (confirmed):**
+- **Repurpose `IsActive` to mean "available / present"** (its original "on roster" intent). Toggled per player in the **team roster** (persistent).
+- **Decouple starter/bench from `IsActive`:** starters are no longer auto-defaulted from it. In Game Setup **every present player starts on the bench, always** — also for a single-player opponent — and the scorer picks the starters each match (US-34 toggle).
+- **Absent** (`IsActive = false`) players are excluded from the Game Setup lineup **and** the scoring screen entirely.
+- **Transition:** on the update that ships this story, **all existing players are set to present once**. Today `IsActive = false` means "starts on the bench" or "soft-deleted", not "absent", so without the reset those players would silently vanish from the next Game Setup.
+
+**Acceptance criteria**
+- The team roster shows a clear **present/absent** toggle per player (reusing the existing Active toggle, relabeled e.g. "Available").
+- After the update, every existing player is present exactly once (the reset never runs again, so later absent marks stick).
+- Game Setup lists **only present** players; all begin on the bench; the scorer picks starters (at least 1 per team, as today). Absent players never appear.
+- The scoring screen shows **only the players who were present for that match** (on-court + bench) — never absent players, and never "all team players" as today.
+- **Resuming** an in-progress game shows the same on-court + bench players as when it started, including bench players who never subbed in.
+- Toggling availability later does **not** alter a past or in-progress game's roster (participants are fixed once the game starts).
+- In that match's **PDF report** (mini shot-chart grids) and the **live box score**, absent players don't appear as empty entries.
+- Existing recorded games and their stats are unaffected; games recorded before this story (no stored match roster) keep today's behavior.
+
+**Technical notes**
+- **`IsActive`:** no schema change; relabel the PlayerDetail/TeamDetail toggle to "Available". One-time reset `UPDATE Players SET IsActive = 1`, guarded by a run-once marker (e.g. a `Preferences` key or the existing startup schema-patch step in `MauiProgram`) so it never runs twice.
+- **Game Setup:** `GameSetupViewModel.OnSelected*TeamChanged` currently splits `IsActive`→starters / `!IsActive`→bench. Change to: only `IsActive` players, all into the **bench** list, none auto-starter.
+- **Persist the match roster (schema addition):** today Game Setup passes only the starter ids, and only the starters are persisted (as `SubIn` events at game start), so bench players have **no** events. Their participation therefore can't be reconstructed from events on resume. Store the present-player ids per side on the `Game` (e.g. `HomeRosterIds` / `AwayRosterIds`, comma-separated). Add the columns via the existing column-patch mechanism in `MauiProgram`, write them when Game Setup creates the game, and include them in the game/season import-export bundle (`ImportExportService`, parity per US-14/US-19).
+- **Scoring screen:** `GameScoringViewModel` currently builds the bench as *all* team players not on court (`_allHomePlayers` minus on-court). Build on-court/bench from the stored match roster instead, for new **and** resumed games. Fallback when the roster is null (legacy games): today's behavior.
+- **Report + live box score:** for a game with a stored roster, feed that roster (not all team players) to `DrawMiniShotChartsGrid` and the box-score line building. Same legacy fallback.
+- Interacts with US-43: the old "mark inactive" soft-delete path disappears; permanent removal moves to US-43.
+
+---
+
+## US-43 — Permanently delete or merge a player (type-to-confirm) 🗑️
+**Priority:** Medium · **Size:** L · **Type:** Feature
+
+**As a** coach, **I want** to permanently remove a player from a team — either deleting them with all their stats, or merging them into another player — behind a strong confirmation, **so that** I can clean up an accidental duplicate (e.g. a dup who played one minute).
+
+**Scope decisions (confirmed):**
+- Two irreversible actions on a player with game history: **Delete** (player + all their stats) and **Merge into…** (move all their stats to another player on the same team, then remove the duplicate).
+- **Type-to-confirm** for both: type the player's name, mirroring the season delete. Because a duplicate usually has the **same name** as the original, the dialog must also show **jersey number, games played and event count**, so the scorer can tell the duplicate from the original.
+- **Other players' linked follow-ups are kept, only unlinked:** a teammate's assist on a deleted basket, or a rebound off a deleted miss, stays credited; its `LinkedEventId` is cleared.
+
+**Acceptance criteria**
+- **Player without game history:** the simple confirm of today (unchanged).
+- **Delete (with history):** removes the player and **all their own `StatEvent`s** (including their own assists/rebounds and their `SubIn`/`SubOut`). Afterwards they're gone from every box score, shot chart and season stat; affected games' scores/totals recompute (stats are event-derived, no stored scores).
+- Other players' events that linked to a deleted event remain, with the link cleared (no dangling references).
+- **Merge into…:** the scorer picks a target player on the same team. All the duplicate's events are reassigned to the target, then the duplicate is removed. The target's stats now include those actions; no stats are lost.
+- **Merge is blocked** with a clear message if the two players were **on court at the same time** in any game, since one player can't be on court twice. For the typical case (the dup subbed in for the original) there's no overlap and the merge just works.
+- Both actions require typing the player's name; cancelling or a mismatch leaves everything untouched. The warning states the action is irreversible and shows the counts.
+- Both actions are **atomic** — a failure leaves nothing half-done.
+
+**Technical notes**
+- `StatEvent→Player` FK is `Restrict` (hence today's "mark inactive" fallback, removed by this story together with US-42).
+- Run everything inside `IUnitOfWork.ExecuteInTransactionAsync`.
+- **Delete:** first set `LinkedEventId = null` on other players' events that point at the player's events. Do it explicitly in the transaction rather than relying on the DB `SetNull`, which only acts at the DB level or on tracked entities. Then delete the player's events and the player.
+- **Merge:** check overlap using the per-player on-court interval logic from `ComputeGameMetrics` (`SubIn`/`SubOut` → absolute-second intervals per game). If there's no overlap, update `PlayerId` duplicate→target on all their events and delete the duplicate.
+- Repository additions: `IStatEventRepository` gets delete-by-player, reassign-player and unlink-links-to-player methods. The player repo already has `DeleteAsync`.
+- UI: `DisplayPromptAsync` name check (case-insensitive) like `SeasonOverviewViewModel.DeleteSeasonAsync`. Merge target via `DisplayActionSheet` listing the team's other players with their jersey numbers.
+- After the action, `RefreshPlayersAsync`; box scores and season stats recompute from the remaining events.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -761,7 +838,10 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 - ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
 - ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
 - ✅ **US-39** — Per-quarter shot charts in the match PDF (PR #60, merged).
-- 📋 **US-40** — Per-quarter minutes played (MM:SS) in the match PDF (planned).
+- ✅ **US-40** — Per-quarter minutes played (MM:SS) in the match PDF (PR #62, merged).
+- 📋 **US-41** — Confirm before advancing to the next quarter (planned).
+- 📋 **US-42** — Player availability per match (present/absent) (planned).
+- 📋 **US-43** — Permanently delete or merge a player (type-to-confirm) (planned).
 
 ## Suggested implementation order (remaining)
 
@@ -799,7 +879,12 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 **Phase 6 — per-quarter match report:**
 22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. ✅ *done*
 23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. ✅ *done*
-24. **US-40** — per-quarter minutes (MM:SS) in the per-quarter box score; fills the MIN column US-38 leaves as `-`. Per-period slice of the existing minutes interval logic. 📋 *planned*
+24. **US-40** — per-quarter minutes (MM:SS) in the per-quarter box score; fills the MIN column US-38 leaves as `-`. Per-period slice of the existing minutes interval logic. ✅ *done*
+
+**Phase 7 — roster control & scoring guards:**
+25. **US-41** — confirm before advancing to the next quarter. Tiny, do first. 📋 *planned*
+26. **US-42** — player availability per match (present/absent): repurpose `IsActive` (one-time reset to present), all present players start on the bench, persist the match roster on `Game`, exclude absentees from setup, scoring, live box score and PDF. 📋 *planned*
+27. **US-43** — permanently delete **or merge** a player (type-to-confirm with jersey + counts); others' linked follow-ups are kept but unlinked; merge blocked on overlapping court time. Replaces the old soft-delete-on-history fallback. 📋 *planned* — pairs with US-42 (both touch the roster/delete flow).
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
