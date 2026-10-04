@@ -719,6 +719,63 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 
 ---
 
+## US-41 — Confirm before advancing to the next quarter ✅
+**Priority:** Medium · **Size:** S · **Type:** Enhancement
+
+**As a** scorer, **I want** a confirmation when I tap the next-quarter button, **so that** I don't accidentally advance the period mid-game.
+
+**Acceptance criteria**
+- Tapping **Q+** (advance period) shows a confirm dialog (e.g. "Advance to Q2?" / into overtime "Start OT1?") with Confirm / Cancel.
+- Confirm advances the period and resets the clock exactly as today; Cancel does nothing.
+- Applies to regulation and overtime advances.
+- The **END** (finish game) button keeps its own confirmation; this story only adds one to the period-advance action.
+
+**Technical notes**
+In `GameScoringViewModel`, the command behind **Q+** (period advance) gets a `Shell.Current.DisplayAlertAsync` confirm before it increments `Quarter` / resets the clock. Name the next period with the same label logic used elsewhere (`Q{n}` / `OT{n}`).
+
+---
+
+## US-42 — Player availability per match (present/absent) 🙋
+**Priority:** High · **Size:** M · **Type:** Feature
+
+**As a** coach/scorer, **I want** to mark at team level who is present/available for the next match, **so that** absent players don't appear anywhere in that match.
+
+**Scope decisions (confirmed):**
+- **Repurpose `IsActive` to mean "available / present"** (its original "on roster" intent). Toggled per player in the **team roster** (persistent).
+- **Decouple starter/bench from `IsActive`:** starters are no longer auto-defaulted from it. In Game Setup every *present* player starts on the bench and you pick the 5 starters fresh each match (US-34 toggle).
+- **Absent** (`IsActive = false`) players are excluded from the Game Setup lineup **and** the scoring screen entirely.
+
+**Acceptance criteria**
+- The team roster shows a clear **present/absent** toggle per player (reusing the existing Active toggle, relabeled e.g. "Available").
+- Game Setup lists **only present** players; all begin on the bench; the scorer picks starters. Absent players never appear.
+- The scoring screen shows **only the players who were present for that match** (on-court + bench) — never absent players, and never "all team players" as today.
+- Toggling availability later does **not** alter a past or in-progress game's roster (participants are fixed once the game starts).
+- Existing recorded games and their stats are unaffected.
+
+**Technical notes**
+`IsActive` already exists → no migration; update the PlayerDetail/TeamDetail label to "Available". `GameSetupViewModel.OnSelected*TeamChanged` currently splits `IsActive`→starters / `!IsActive`→bench — change to: include only `IsActive` players, all into the **bench** list, none auto-starter. `GameScoringViewModel` currently builds the bench as *all* team players not on court (`_allHomePlayers` minus on-court), which would show absentees — change so the scoring roster is the **match's present participants**: pass the present-player id set from Game Setup (not just the starter ids) and build on-court/bench from that; for **resume**, reconstruct participants from the game's `SubIn` events (so later availability edits don't change it). Note: this interacts with US-43 (the old "mark inactive" soft-delete path becomes "mark absent", and true deletion moves to US-43).
+
+---
+
+## US-43 — Permanently delete a player and all their stats (type-to-confirm) 🗑️
+**Priority:** Medium · **Size:** M · **Type:** Feature
+
+**As a** coach, **I want** to fully delete a player from a team — including all their recorded stats — behind a strong confirmation, **so that** I can remove an accidental duplicate (e.g. a dup who played one minute).
+
+**Scope decision (confirmed):** **type-to-confirm** — the user types the player's name (or "DELETE") to proceed; a plain tap is not enough.
+
+**Acceptance criteria**
+- In the team roster, a player (including one **with game history**) can be **permanently deleted**, which removes the player **and all their `StatEvent`s**.
+- A **type-to-confirm** step is required (type the exact player name / "DELETE"); cancelling leaves everything untouched. An extra warning states it also erases all their stats and is irreversible.
+- After deletion the player is gone from every box score, shot chart and season stat; affected games' scores/totals recompute without them (stats are event-derived).
+- Linked follow-ups (an assist/rebound whose `LinkedEventId` points at a deleted event) are unlinked, not left dangling.
+- The operation is **atomic** — a failure leaves nothing half-deleted.
+
+**Technical notes**
+`StatEvent→Player` FK is `Restrict` (hence today's "mark inactive" fallback). Delete the player's `StatEvent`s first, then the player, inside `IUnitOfWork.ExecuteInTransactionAsync`; the `LinkedEvent` self-FK is `SetNull`, so dangling assist/rebound links null out automatically. Add a delete-by-player method to `IStatEventRepository` (player repo already has `DeleteAsync`). Confirmation: `DisplayPromptAsync` compared to the player name (case-insensitive) — mirror the season type-to-confirm (US-12). After `RefreshPlayersAsync`, box scores/season stats recompute from the remaining events. With US-42 in place, keep (soft) availability separate from this permanent delete.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -761,7 +818,10 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 - ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
 - ✅ **US-38** — Per-quarter box score tables in the match PDF (PR #59, merged).
 - ✅ **US-39** — Per-quarter shot charts in the match PDF (PR #60, merged).
-- 📋 **US-40** — Per-quarter minutes played (MM:SS) in the match PDF (planned).
+- ✅ **US-40** — Per-quarter minutes played (MM:SS) in the match PDF (PR #62, merged).
+- 📋 **US-41** — Confirm before advancing to the next quarter (planned).
+- 📋 **US-42** — Player availability per match (present/absent) (planned).
+- 📋 **US-43** — Permanently delete a player and all their stats (type-to-confirm) (planned).
 
 ## Suggested implementation order (remaining)
 
@@ -799,7 +859,12 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 **Phase 6 — per-quarter match report:**
 22. **US-38** — per-quarter box score tables in the match PDF (full per-player, both teams), appended after the complete-match sections. ✅ *done*
 23. **US-39** — per-quarter shot charts (mini per player) in the match PDF; builds on US-38's per-quarter page scaffolding. ✅ *done*
-24. **US-40** — per-quarter minutes (MM:SS) in the per-quarter box score; fills the MIN column US-38 leaves as `-`. Per-period slice of the existing minutes interval logic. 📋 *planned*
+24. **US-40** — per-quarter minutes (MM:SS) in the per-quarter box score; fills the MIN column US-38 leaves as `-`. Per-period slice of the existing minutes interval logic. ✅ *done*
+
+**Phase 7 — roster control & scoring guards:**
+25. **US-41** — confirm before advancing to the next quarter. Tiny, do first. 📋 *planned*
+26. **US-42** — player availability per match (present/absent); repurpose `IsActive`, decouple starter/bench, exclude absentees from setup + scoring. 📋 *planned*
+27. **US-43** — permanently delete a player and all their stats (type-to-confirm); replaces the old soft-delete-on-history fallback. 📋 *planned* — pairs with US-42 (both touch the roster/delete flow).
 
 **Dependencies / sequencing rationale**
 - US-18 before US-21/US-25: both need the OT-safe absolute-time helper it introduces.
