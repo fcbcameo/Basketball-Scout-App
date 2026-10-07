@@ -97,6 +97,8 @@ public class ImportExportService
                 ClockSecondsRemaining = game.ClockSecondsRemaining,
                 CurrentPeriod = game.CurrentPeriod,
                 ExportGuid = game.ExportGuid,
+                HomeRoster = ExportRoster(game.HomeRosterIds, homeTeam?.Players ?? []),
+                AwayRoster = ExportRoster(game.AwayRosterIds, awayTeam?.Players ?? []),
                 Events = events.Select(e =>
                 {
                     // Resolve player name from teams
@@ -223,7 +225,11 @@ public class ImportExportService
                         : gameExport.ExportGuid,
                     HomeTeamId = homeTeamId,
                     AwayTeamId = awayTeamId,
-                    SeasonId = season.Id
+                    SeasonId = season.Id,
+                    HomeRosterIds = ImportRoster(gameExport.HomeRoster, r =>
+                        playerIdByKey.GetValueOrDefault($"{gameExport.HomeTeamName}|{r.Name}|{r.Jersey}")),
+                    AwayRosterIds = ImportRoster(gameExport.AwayRoster, r =>
+                        playerIdByKey.GetValueOrDefault($"{gameExport.AwayTeamName}|{r.Name}|{r.Jersey}"))
                 });
 
                 // Pass 1: insert events, mapping local id → new id (legacy files have no
@@ -436,7 +442,9 @@ public class ImportExportService
                 Status = game.Status,
                 ClockSecondsRemaining = game.ClockSecondsRemaining,
                 CurrentPeriod = game.CurrentPeriod,
-                ExportGuid = game.ExportGuid
+                ExportGuid = game.ExportGuid,
+                HomeRoster = ExportRoster(game.HomeRosterIds, homeRoster),
+                AwayRoster = ExportRoster(game.AwayRosterIds, awayRoster)
             },
             HomeTeam = ToTeamBundle(game.HomeTeam, homeRoster),
             AwayTeam = ToTeamBundle(game.AwayTeam, awayRoster),
@@ -465,6 +473,22 @@ public class ImportExportService
 
         return JsonSerializer.Serialize(bundle, JsonOptions);
     }
+
+    /// <summary>US-42: a game's stored match roster as portable name+jersey entries (players
+    /// get new ids on import), or null when the game has no stored roster.</summary>
+    private static List<RosterPlayerExport>? ExportRoster(string? stored, IEnumerable<Player> teamPlayers)
+    {
+        var ids = Game.ParseRosterIds(stored);
+        if (ids is null) return null;
+        return teamPlayers.Where(p => ids.Contains(p.Id))
+            .Select(p => new RosterPlayerExport { Name = p.Name, Jersey = p.JerseyNumber })
+            .ToList();
+    }
+
+    /// <summary>US-42: rebuilds a stored match roster from an import, resolving each entry to the
+    /// imported player's new id. Null stays null (legacy game → whole team).</summary>
+    private static string? ImportRoster(List<RosterPlayerExport>? roster, Func<RosterPlayerExport, int> resolveId) =>
+        roster is null ? null : Game.FormatRosterIds(roster.Select(resolveId).Where(id => id > 0));
 
     private static TeamBundle ToTeamBundle(Team team, IReadOnlyList<Player> roster) => new()
     {
@@ -521,7 +545,11 @@ public class ImportExportService
                     : bundle.Game.ExportGuid,
                 SeasonId = targetSeasonId,
                 HomeTeamId = home.TeamId,
-                AwayTeamId = away.TeamId
+                AwayTeamId = away.TeamId,
+                HomeRosterIds = ImportRoster(bundle.Game.HomeRoster, r =>
+                    home.PlayerIdByName.TryGetValue(r.Name, out var id) ? id : 0),
+                AwayRosterIds = ImportRoster(bundle.Game.AwayRoster, r =>
+                    away.PlayerIdByName.TryGetValue(r.Name, out var id) ? id : 0)
             });
             result.GameId = game.Id;
 
@@ -770,7 +798,17 @@ public class GameExport
     public int ClockSecondsRemaining { get; set; } = 600;
     public int CurrentPeriod { get; set; } = 1;
     public string? ExportGuid { get; set; }
+    /// <summary>US-42 match roster per side; null for games without one (and for older files).</summary>
+    public List<RosterPlayerExport>? HomeRoster { get; set; }
+    public List<RosterPlayerExport>? AwayRoster { get; set; }
     public List<StatEventExport> Events { get; set; } = [];
+}
+
+/// <summary>A player present for a match (US-42), identified portably by name + jersey.</summary>
+public class RosterPlayerExport
+{
+    public string Name { get; set; } = string.Empty;
+    public int Jersey { get; set; }
 }
 
 public class StatEventExport
@@ -836,6 +874,9 @@ public class GameDataExport
     public int CurrentPeriod { get; set; }
     /// <summary>Stable game identity for duplicate detection on re-import (US-19).</summary>
     public string? ExportGuid { get; set; }
+    /// <summary>US-42 match roster per side; null for games without one (and for older files).</summary>
+    public List<RosterPlayerExport>? HomeRoster { get; set; }
+    public List<RosterPlayerExport>? AwayRoster { get; set; }
 }
 
 public class TeamBundle

@@ -109,8 +109,10 @@ public static class MauiProgram
         if (connection.State != System.Data.ConnectionState.Open)
             connection.Open();
 
-        void AddColumns(string table, params (string Name, string Definition)[] columns)
+        // Returns the names of the columns it actually added (empty when all already existed).
+        HashSet<string> AddColumns(string table, params (string Name, string Definition)[] columns)
         {
+            var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             using (var pragma = connection.CreateCommand())
             {
@@ -126,17 +128,34 @@ public static class MauiProgram
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = $"ALTER TABLE {table} ADD COLUMN {definition};";
                 cmd.ExecuteNonQuery();
+                added.Add(name);
             }
+
+            return added;
         }
 
-        AddColumns("Games",
+        var addedGameColumns = AddColumns("Games",
             ("Status", "Status INTEGER NOT NULL DEFAULT 1"),                       // legacy games → Finished
             ("ClockSecondsRemaining", "ClockSecondsRemaining INTEGER NOT NULL DEFAULT 600"),
             ("CurrentPeriod", "CurrentPeriod INTEGER NOT NULL DEFAULT 1"),
             ("ExportGuid", "ExportGuid TEXT NULL"),                                 // US-19 duplicate detection
             ("PeriodLengthSeconds", "PeriodLengthSeconds INTEGER NOT NULL DEFAULT 600"),   // US-21 format snapshot
             ("OvertimeLengthSeconds", "OvertimeLengthSeconds INTEGER NOT NULL DEFAULT 300"),
-            ("RegulationPeriods", "RegulationPeriods INTEGER NOT NULL DEFAULT 4"));
+            ("RegulationPeriods", "RegulationPeriods INTEGER NOT NULL DEFAULT 4"),
+            ("HomeRosterIds", "HomeRosterIds TEXT NULL"),                           // US-42 match roster
+            ("AwayRosterIds", "AwayRosterIds TEXT NULL"));
+
+        // US-42 upgrade: IsActive now means "available for matches". Before, false meant
+        // "starts on the bench" or "soft-deleted", so those players would silently vanish from
+        // the next Game Setup. Make everyone available once — tied to the moment the roster
+        // columns are first added, so it runs exactly once and never undoes later absent marks.
+        // (Fresh installs get the columns from EnsureCreated and skip this; they have no players.)
+        if (addedGameColumns.Contains("HomeRosterIds"))
+        {
+            using var reset = connection.CreateCommand();
+            reset.CommandText = "UPDATE Players SET IsActive = 1;";
+            reset.ExecuteNonQuery();
+        }
 
         AddColumns("Seasons",
             ("PeriodLengthMinutes", "PeriodLengthMinutes INTEGER NOT NULL DEFAULT 10"),    // US-21 format

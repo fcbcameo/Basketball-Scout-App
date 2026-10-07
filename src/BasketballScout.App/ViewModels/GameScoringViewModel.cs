@@ -347,21 +347,13 @@ public partial class GameScoringViewModel : ObservableObject
             awayActiveIds = ParseIds(_awayActiveIdsParsed);
         }
 
-        HomeOnCourt.Clear();
-        HomeBench.Clear();
-        foreach (var p in _allHomePlayers)
-        {
-            if (homeActiveIds.Contains(p.Id)) HomeOnCourt.Add(p);
-            else HomeBench.Add(p);
-        }
-
-        AwayOnCourt.Clear();
-        AwayBench.Clear();
-        foreach (var p in _allAwayPlayers)
-        {
-            if (awayActiveIds.Contains(p.Id)) AwayOnCourt.Add(p);
-            else AwayBench.Add(p);
-        }
+        // US-42: only the players present for this match take part (stored at Game Setup, so
+        // resume rebuilds the same bench and later availability edits don't change it). Games
+        // recorded before availability existed have no stored roster → whole team, as before.
+        FillCourtAndBench(_allHomePlayers, homeActiveIds, Game.ParseRosterIds(game.HomeRosterIds),
+            HomeOnCourt, HomeBench);
+        FillCourtAndBench(_allAwayPlayers, awayActiveIds, Game.ParseRosterIds(game.AwayRosterIds),
+            AwayOnCourt, AwayBench);
 
         if (!anySubEvents)
         {
@@ -400,6 +392,21 @@ public partial class GameScoringViewModel : ObservableObject
 
     private static HashSet<int> ParseIds(string csv) =>
         csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
+
+    /// <summary>Splits a team into on-court and bench. Bench = the match roster minus the
+    /// on-court players (US-42); with no stored roster (legacy game) the whole team. Anyone
+    /// on court is always shown, even if somehow missing from the roster.</summary>
+    private static void FillCourtAndBench(IEnumerable<Player> team, HashSet<int> onCourtIds,
+        HashSet<int>? roster, ObservableCollection<Player> onCourt, ObservableCollection<Player> bench)
+    {
+        onCourt.Clear();
+        bench.Clear();
+        foreach (var p in team)
+        {
+            if (onCourtIds.Contains(p.Id)) onCourt.Add(p);
+            else if (roster is null || roster.Contains(p.Id)) bench.Add(p);
+        }
+    }
 
     /// <summary>
     /// Replays the substitution history to determine who is currently on court for each

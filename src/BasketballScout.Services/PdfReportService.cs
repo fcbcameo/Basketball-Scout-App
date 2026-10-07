@@ -115,6 +115,13 @@ public class PdfReportService
         var homeIds = homePlayers.Select(p => p.Id).ToHashSet();
         var awayIds = awayPlayers.Select(p => p.Id).ToHashSet();
 
+        // US-42: the shot-chart grids only show players present for this match (the roster
+        // stored at Game Setup), so absentees don't get empty mini courts. Team attribution
+        // above keeps the whole team. Legacy games without a stored roster: whole team.
+        var playersWithEvents = events.Select(e => e.PlayerId).ToHashSet();
+        var homeGrid = PresentPlayers(homePlayers, Game.ParseRosterIds(game?.HomeRosterIds), playersWithEvents);
+        var awayGrid = PresentPlayers(awayPlayers, Game.ParseRosterIds(game?.AwayRosterIds), playersWithEvents);
+
         var format = game is null ? GameFormat.Default : GameFormat.FromGame(game);
 
         int[] homeQ = ComputeQuarterScores(events, homeIds, format.RegulationPeriods);
@@ -152,7 +159,7 @@ public class PdfReportService
             teamName: box.AwayTeamName,
             matchup: matchup,
             lines: box.AwayLines,
-            roster: awayPlayers,
+            roster: awayGrid,
             events: events,
             homeQuarterScores: homeQ,
             awayQuarterScores: awayQ,
@@ -170,7 +177,7 @@ public class PdfReportService
             teamName: box.HomeTeamName,
             matchup: matchup,
             lines: box.HomeLines,
-            roster: homePlayers,
+            roster: homeGrid,
             events: events,
             homeQuarterScores: homeQ,
             awayQuarterScores: awayQ,
@@ -209,18 +216,25 @@ public class PdfReportService
             var awayLines = _statsService.BuildPeriodBoxLines(events, awayPlayers, period, periodSeconds);
             if (awayLines.Count > 0)
                 DrawQuarterTeamPage(doc, $"{periodLabel} — {box.AwayTeamName}", matchup,
-                    awayLines, awayPlayers, periodEvents);
+                    awayLines, awayGrid, periodEvents);
 
             var homeLines = _statsService.BuildPeriodBoxLines(events, homePlayers, period, periodSeconds);
             if (homeLines.Count > 0)
                 DrawQuarterTeamPage(doc, $"{periodLabel} — {box.HomeTeamName}", matchup,
-                    homeLines, homePlayers, periodEvents);
+                    homeLines, homeGrid, periodEvents);
         }
 
         using var stream = new MemoryStream();
         doc.Save(stream, false);
         return stream.ToArray();
     }
+
+    /// <summary>US-42: the team's players who took part in a match — its stored roster plus anyone
+    /// with events in it (e.g. stats merged in later) — or the whole team when no roster was stored.</summary>
+    private static List<Player> PresentPlayers(List<Player> team, HashSet<int>? roster, HashSet<int> withEvents) =>
+        roster is null
+            ? team
+            : team.Where(p => roster.Contains(p.Id) || withEvents.Contains(p.Id)).ToList();
 
     // ── Per-team page ─────────────────────────────────────────────────────────
 

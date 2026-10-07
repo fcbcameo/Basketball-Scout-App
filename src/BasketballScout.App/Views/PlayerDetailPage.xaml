@@ -41,8 +41,9 @@
 
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                         <Switch IsToggled="{Binding IsActive}" OnColor="#4ade80" />
+                        <!-- US-42: IsActive = available for upcoming matches -->
                         <Label Grid.Column="1"
-                               Text="{Binding IsActive, StringFormat='Active: {0}'}"
+                               Text="Available for matches"
                                FontSize="14"
                                VerticalOptions="Center" />
                     </Grid>

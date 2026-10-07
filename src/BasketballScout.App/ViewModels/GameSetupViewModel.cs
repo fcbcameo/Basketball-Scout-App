@@ -58,28 +58,23 @@ public partial class GameSetupViewModel : ObservableObject
             Teams.Add(team);
     }
 
-    partial void OnSelectedHomeTeamChanged(Team? value)
+    // US-42: IsActive means "available for matches". Only available players take part, and
+    // they all start on the bench — the scorer picks the starters fresh for every match.
+    partial void OnSelectedHomeTeamChanged(Team? value) =>
+        LoadAvailablePlayers(value, HomeActivePlayers, HomeBenchPlayers);
+
+    partial void OnSelectedAwayTeamChanged(Team? value) =>
+        LoadAvailablePlayers(value, AwayActivePlayers, AwayBenchPlayers);
+
+    private static void LoadAvailablePlayers(
+        Team? team, ObservableCollection<Player> starters, ObservableCollection<Player> bench)
     {
-        HomeActivePlayers.Clear();
-        HomeBenchPlayers.Clear();
-        if (value?.Players is null) return;
+        starters.Clear();
+        bench.Clear();
+        if (team?.Players is null) return;
 
-        foreach (var p in value.Players.Where(p => p.IsActive).OrderBy(p => p.JerseyNumber))
-            HomeActivePlayers.Add(p);
-        foreach (var p in value.Players.Where(p => !p.IsActive).OrderBy(p => p.JerseyNumber))
-            HomeBenchPlayers.Add(p);
-    }
-
-    partial void OnSelectedAwayTeamChanged(Team? value)
-    {
-        AwayActivePlayers.Clear();
-        AwayBenchPlayers.Clear();
-        if (value?.Players is null) return;
-
-        foreach (var p in value.Players.Where(p => p.IsActive).OrderBy(p => p.JerseyNumber))
-            AwayActivePlayers.Add(p);
-        foreach (var p in value.Players.Where(p => !p.IsActive).OrderBy(p => p.JerseyNumber))
-            AwayBenchPlayers.Add(p);
+        foreach (var p in team.Players.Where(p => p.IsActive).OrderBy(p => p.JerseyNumber))
+            bench.Add(p);
     }
 
     [RelayCommand]
@@ -139,7 +134,9 @@ public partial class GameSetupViewModel : ObservableObject
 
         if (HomeActivePlayers.Count < 1 || AwayActivePlayers.Count < 1)
         {
-            await Shell.Current.DisplayAlertAsync("Lineup", "Each team needs at least 1 active player.", "OK");
+            await Shell.Current.DisplayAlertAsync("Lineup",
+                "Each team needs at least 1 starter. Tap a bench player to move them to STARTERS.\n\n" +
+                "Missing a player? Mark them Available in the team roster.", "OK");
             return;
         }
 
@@ -160,7 +157,12 @@ public partial class GameSetupViewModel : ObservableObject
             ExportGuid = Guid.NewGuid().ToString(), // stable identity for export/duplicate detection (US-19)
             PeriodLengthSeconds = periodMinutes * 60,
             OvertimeLengthSeconds = otMinutes * 60,
-            RegulationPeriods = periods
+            RegulationPeriods = periods,
+            // US-42: who is present for this match (starters + bench), fixed for its lifetime so
+            // later availability edits never change a game's roster — and resume can rebuild the
+            // bench, since bench players who never sub in have no events of their own.
+            HomeRosterIds = Game.FormatRosterIds(HomeActivePlayers.Concat(HomeBenchPlayers).Select(p => p.Id)),
+            AwayRosterIds = Game.FormatRosterIds(AwayActivePlayers.Concat(AwayBenchPlayers).Select(p => p.Id))
         };
 
         var created = await _gameRepository.AddAsync(game);
