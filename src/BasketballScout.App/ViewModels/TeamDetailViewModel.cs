@@ -209,20 +209,30 @@ public partial class TeamDetailViewModel : ObservableObject
         await Shell.Current.GoToAsync($"{nameof(Views.PlayerDetailPage)}?playerId={player.Id}&teamId={TeamId}");
     }
 
+    /// <summary>US-42: flip a player's availability for upcoming matches (IsActive = available).
+    /// Only games set up afterwards are affected — each game keeps the roster it started with.</summary>
+    [RelayCommand]
+    private async Task ToggleAvailabilityAsync(Player player)
+    {
+        player.IsActive = !player.IsActive;
+        await _playerRepository.UpdateAsync(player);
+        await RefreshPlayersAsync(); // Player isn't observable, so reload the rows to restyle the badge
+    }
+
     [RelayCommand]
     private async Task DeletePlayerAsync(Player player)
     {
         // A player who has appeared in any game has StatEvents referencing them, and the
         // StatEvent→Player FK is Restrict — a hard delete would throw an unhandled
-        // DbUpdateException and crash. Offer deactivation instead so game history stays
-        // intact; inactive players drop out of the lineup pickers (which filter IsActive).
+        // DbUpdateException and crash. Offer marking them absent instead so game history stays
+        // intact; absent players don't appear in Game Setup (US-42). Permanent delete → US-43.
         var history = await _statEventRepository.GetByPlayerIdAsync(player.Id);
         if (history.Count > 0)
         {
             bool markInactive = await Shell.Current.DisplayAlertAsync(
                 "Player Has Game History",
-                $"#{player.JerseyNumber} {player.Name} has recorded stats, so deleting them would lose game history.\n\nMark them inactive instead? They stay in past box scores but won't appear when picking a lineup.",
-                "Mark Inactive", "Cancel");
+                $"#{player.JerseyNumber} {player.Name} has recorded stats, so deleting them would lose game history.\n\nMark them absent instead? They stay in past box scores but won't be available for new matches.",
+                "Mark Absent", "Cancel");
             if (!markInactive) return;
 
             player.IsActive = false;

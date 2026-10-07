@@ -29,6 +29,23 @@ public class Game
     public int OvertimeLengthSeconds { get; set; } = 300;
     public int RegulationPeriods { get; set; } = 4;
 
+    // ── Match roster (US-42) ── Ids of the players present for this match per side (starters
+    // and bench together), comma-separated, captured at Game Setup. Null for games recorded
+    // before availability existed — callers then fall back to the whole team.
+    public string? HomeRosterIds { get; set; }
+    public string? AwayRosterIds { get; set; }
+
+    public static string FormatRosterIds(IEnumerable<int> ids) => string.Join(",", ids);
+
+    /// <summary>The stored roster as a set of player ids, or null when none was stored.</summary>
+    public static HashSet<int>? ParseRosterIds(string? stored) =>
+        string.IsNullOrWhiteSpace(stored)
+            ? null
+            : stored.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var id) ? id : 0)
+                .Where(id => id > 0)
+                .ToHashSet();
+
     public int SeasonId { get; set; }
     public Season Season { get; set; } = null!;
 
