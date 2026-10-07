@@ -605,28 +605,8 @@ public class GameStatsService
         if (!events.Any(e => e.StatType is StatType.SubIn or StatType.SubOut))
             return result;
 
-        var ordered = events
-            .Select(e => new { Event = e, AbsSec = format.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
-            .OrderBy(x => x.AbsSec)
-            .ThenBy(x => x.Event.Id)
-            .ToList();
-
-        int gameEndSec = ordered.Count > 0 ? ordered[^1].AbsSec : 0;
         int maxPeriod = events.Count > 0 ? events.Max(e => e.Quarter) : format.RegulationPeriods;
-
-        // On-court intervals (absolute seconds) per player, closing any still-open one at game end.
-        var onSince = new Dictionary<int, int>();
-        var intervals = new Dictionary<int, List<(int Start, int End)>>();
-        foreach (var entry in ordered)
-        {
-            var e = entry.Event;
-            if (e.StatType == StatType.SubIn)
-                onSince[e.PlayerId] = entry.AbsSec;
-            else if (e.StatType == StatType.SubOut && onSince.Remove(e.PlayerId, out var start))
-                AddInterval(intervals, e.PlayerId, start, entry.AbsSec);
-        }
-        foreach (var (playerId, start) in onSince)
-            AddInterval(intervals, playerId, start, gameEndSec);
+        var intervals = BuildOnCourtIntervals(events, format);
 
         // Sum the overlap of each interval with each period's [start, end) window.
         for (int period = 1; period <= maxPeriod; period++)
@@ -643,6 +623,47 @@ public class GameStatsService
         }
 
         return result;
+    }
+
+    /// <summary>Each player's on-court intervals in one game, in absolute game seconds, from the
+    /// SubIn/SubOut timeline; an interval still open at the end closes at the game's last event.
+    /// Shared by per-period minutes (US-40) and the merge overlap check (US-43).</summary>
+    public static Dictionary<int, List<(int Start, int End)>> BuildOnCourtIntervals(
+        IReadOnlyList<StatEvent> gameEvents, GameFormat format)
+    {
+        var ordered = gameEvents
+            .Select(e => new { Event = e, AbsSec = format.ToAbsoluteSeconds(e.Quarter, e.GameClock) })
+            .OrderBy(x => x.AbsSec)
+            .ThenBy(x => x.Event.Id)
+            .ToList();
+
+        int gameEndSec = ordered.Count > 0 ? ordered[^1].AbsSec : 0;
+
+        var onSince = new Dictionary<int, int>();
+        var intervals = new Dictionary<int, List<(int Start, int End)>>();
+        foreach (var entry in ordered)
+        {
+            var e = entry.Event;
+            if (e.StatType == StatType.SubIn)
+                onSince[e.PlayerId] = entry.AbsSec;
+            else if (e.StatType == StatType.SubOut && onSince.Remove(e.PlayerId, out var start))
+                AddInterval(intervals, e.PlayerId, start, entry.AbsSec);
+        }
+        foreach (var (playerId, start) in onSince)
+            AddInterval(intervals, playerId, start, gameEndSec);
+
+        return intervals;
+    }
+
+    /// <summary>US-43: true when both players were on court at the same moment in this game.
+    /// Back-to-back intervals (one subbed out the second the other came in) don't count.</summary>
+    public static bool WereOnCourtTogether(
+        IReadOnlyList<StatEvent> gameEvents, GameFormat format, int playerA, int playerB)
+    {
+        var intervals = BuildOnCourtIntervals(gameEvents, format);
+        if (!intervals.TryGetValue(playerA, out var a) || !intervals.TryGetValue(playerB, out var b))
+            return false;
+        return a.Any(x => b.Any(y => Math.Min(x.End, y.End) > Math.Max(x.Start, y.Start)));
     }
 
     private static void AddInterval(
