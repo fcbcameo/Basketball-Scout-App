@@ -19,6 +19,26 @@
 	<string>BasketballScout does not use the microphone.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- UIScene lifecycle: required for apps built with the iOS 27 SDK (otherwise iOS kills the
+	     app at launch). Single window; the delegate is Platforms/iOS/SceneDelegate.cs, and the
+	     configuration name is MAUI's default scene configuration. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>__MAUI_DEFAULT_SCENE_CONFIGURATION__</string>
+					<key>UISceneDelegateClassName</key>
+					<string>SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
