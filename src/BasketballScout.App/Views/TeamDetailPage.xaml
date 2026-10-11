@@ -115,9 +115,12 @@
                                 Padding="12,6" />
                     </Grid>
 
-                    <CollectionView ItemsSource="{Binding Players}"
-                                    EmptyView="No players on this roster yet.">
-                        <CollectionView.ItemTemplate>
+                    <!-- BindableLayout, not CollectionView: inside the page's ScrollView a
+                         CollectionView can measure to zero height (see US-34 / SeasonDetailPage). -->
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding Players}"
+                                         BindableLayout.EmptyView="No players on this roster yet.">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Player">
                                 <SwipeView>
                                     <SwipeView.RightItems>
@@ -179,8 +182,8 @@
                                     </Border>
                                 </SwipeView>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 

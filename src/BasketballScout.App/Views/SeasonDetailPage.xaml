@@ -129,9 +129,13 @@
                                 Padding="12,6" />
                     </Grid>
 
-                    <CollectionView ItemsSource="{Binding Teams}"
-                                    EmptyView="No teams yet. Tap '+ Team' to add one.">
-                        <CollectionView.ItemTemplate>
+                    <!-- BindableLayout, not CollectionView: a CollectionView inside the page's
+                         ScrollView can measure to zero height (rows silently missing — see US-34),
+                         which MAUI 10.0.110 does here. A stack sizes to its content. -->
+                    <VerticalStackLayout Spacing="0"
+                                         BindableLayout.ItemsSource="{Binding Teams}"
+                                         BindableLayout.EmptyView="No teams yet. Tap '+ Team' to add one.">
+                        <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:Team">
                                 <Border Padding="12" Margin="0,4"
                                         BackgroundColor="{AppThemeBinding Light=#fff, Dark=#222}"
@@ -160,8 +164,8 @@
                                     </Grid>
                                 </Border>
                             </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>
 
