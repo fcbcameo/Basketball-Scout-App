@@ -47,6 +47,7 @@ public static class MauiProgram
         builder.Services.AddScoped<GameStatsService>();
         builder.Services.AddScoped<PdfReportService>();
         builder.Services.AddScoped<ImportExportService>();
+        builder.Services.AddScoped<PlayerCleanupService>();
 
         // ViewModels
         builder.Services.AddTransient<SeasonOverviewViewModel>();

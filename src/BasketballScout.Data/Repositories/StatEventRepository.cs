@@ -70,6 +70,32 @@ public class StatEventRepository : IStatEventRepository
         }
     }
 
+    // US-43 bulk operations: set-based ExecuteUpdate/ExecuteDelete (no change tracking), which
+    // run on the ambient unit-of-work context — and so inside its transaction — when one is active.
+
+    public async Task UnlinkEventsLinkedToPlayerAsync(int playerId)
+    {
+        await using var lease = _ctx.Lease();
+        var playerEventIds = lease.Db.StatEvents.Where(e => e.PlayerId == playerId).Select(e => e.Id);
+        await lease.Db.StatEvents
+            .Where(e => e.LinkedEventId != null && playerEventIds.Contains(e.LinkedEventId.Value))
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.LinkedEventId, (int?)null));
+    }
+
+    public async Task DeleteByPlayerIdAsync(int playerId)
+    {
+        await using var lease = _ctx.Lease();
+        await lease.Db.StatEvents.Where(e => e.PlayerId == playerId).ExecuteDeleteAsync();
+    }
+
+    public async Task ReassignPlayerAsync(int fromPlayerId, int toPlayerId)
+    {
+        await using var lease = _ctx.Lease();
+        await lease.Db.StatEvents
+            .Where(e => e.PlayerId == fromPlayerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.PlayerId, toPlayerId));
+    }
+
     public async Task<StatEvent?> GetLastByGameIdAsync(int gameId)
     {
         await using var lease = _ctx.Lease();

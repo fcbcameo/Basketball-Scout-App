@@ -90,4 +90,16 @@ public class GameRepository : IGameRepository
         game.CurrentPeriod = currentPeriod;
         await lease.Db.SaveChangesAsync();
     }
+
+    public async Task UpdateRosterIdsAsync(int id, string? homeRosterIds, string? awayRosterIds)
+    {
+        // Same bare-row pattern as UpdateGameStateAsync: only the two roster fields change.
+        await using var lease = _ctx.Lease();
+        var game = await lease.Db.Games.FirstOrDefaultAsync(g => g.Id == id);
+        if (game is null) return;
+
+        game.HomeRosterIds = homeRosterIds;
+        game.AwayRosterIds = awayRosterIds;
+        await lease.Db.SaveChangesAsync();
+    }
 }
