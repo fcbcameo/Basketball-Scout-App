@@ -1291,9 +1291,11 @@ public class PdfReportService
         {
             if (!s.CourtX.HasValue || !s.CourtY.HasValue) continue;
 
-            // The app records CourtX,CourtY with basket at bottom (Y ≈ 0.9).
-            // PDF court has basket at top, so flip Y.
-            double px = court.X + Math.Clamp(s.CourtX.Value, 0f, 1f) * court.Width;
+            // The app records CourtX,CourtY with the basket at the bottom (Y ≈ 0.9); the PDF court
+            // has it at the top. That's the same court viewed from the other end, i.e. rotated
+            // 180°: flip BOTH axes. Flipping only Y would mirror it and swap the court's left and
+            // right sides (shots from the shooter's left corner landing in the right one).
+            double px = court.X + (1 - Math.Clamp(s.CourtX.Value, 0f, 1f)) * court.Width;
             double py = court.Y + (1 - Math.Clamp(s.CourtY.Value, 0f, 1f)) * court.Height;
 
             if (s.ShotResult == ShotResult.Made)
