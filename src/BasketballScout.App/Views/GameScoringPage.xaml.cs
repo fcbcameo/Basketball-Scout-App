@@ -48,9 +48,18 @@ public partial class GameScoringPage : ContentPage
             _vm.IsPortrait = height > width;
     }
 
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        // Keep the iPad awake while scoring: auto-lock would blank the screen mid-game, e.g.
+        // during a timeout when nobody touches it. Released again when the page disappears.
+        DeviceDisplay.Current.KeepScreenOn = true;
+    }
+
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        DeviceDisplay.Current.KeepScreenOn = false;
         // Stop the clock (so hardware/gesture back can't leave it ticking on an
         // abandoned page) and persist the exact clock/period for resume.
         _vm.OnPageDisappearingAsync().LogFailures("Save game state on leaving");
