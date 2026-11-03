@@ -1,3 +1,4 @@
+using BasketballScout.App.Diagnostics;
 using BasketballScout.App.ViewModels;
 using BasketballScout.Core.Models;
 using BasketballScout.Services;
@@ -30,6 +31,7 @@ public partial class GameScoringPage : ContentPage
         // Brief toasts: what an undo removed (US-4), and what a stat tap logged (US-8)
         _vm.ActionUndone += OnActionUndone;
         _vm.ActionRecorded += OnActionRecorded;
+        _vm.ActionFailed += OnActionFailed; // safety net: a failed action warns instead of crashing
 
         // Restyle roster cards when foul counts change (foul-trouble flags, US-20)
         _vm.FoulsChanged += OnFoulsChanged;
@@ -51,12 +53,14 @@ public partial class GameScoringPage : ContentPage
         base.OnDisappearing();
         // Stop the clock (so hardware/gesture back can't leave it ticking on an
         // abandoned page) and persist the exact clock/period for resume.
-        _ = _vm.OnPageDisappearingAsync();
+        _vm.OnPageDisappearingAsync().LogFailures("Save game state on leaving");
     }
 
     private void OnActionUndone(string message) => ShowToast(message);
 
     private void OnActionRecorded(string message) => ShowToast($"✓ {message}");
+
+    private void OnActionFailed(string message) => ShowToast($"⚠ {message}");
 
     private async void ShowToast(string message)
     {

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using BasketballScout.App.Diagnostics;
 using BasketballScout.Core.Enums;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Core.Models;
@@ -204,7 +205,7 @@ public partial class GameScoringViewModel : ObservableObject
 
     partial void OnIsPortraitChanged(bool value)
     {
-        if (value) _ = RefreshBoxScoreAsync();
+        if (value) RefreshBoxScoreAsync().LogFailures("Refresh live box score");
     }
 
     /// <summary>Rebuilds the live per-player box score from the game's events (same source as the
@@ -286,7 +287,16 @@ public partial class GameScoringViewModel : ObservableObject
         _statsService = statsService;
 
         _clockTimer.Elapsed += (_, _) => MainThread.BeginInvokeOnMainThread(OnClockTick);
+
+        // Safety net: a failing scoring action is logged and flagged to the scorer instead of
+        // closing the app mid-game. Every action is saved as its own event, so carrying on is safe.
+        CommandSafetyNet.Watch(this, _ => ActionFailed?.Invoke(
+            "Something went wrong — check the last play-by-play entry"));
     }
+
+    /// <summary>Raised when a scoring action failed unexpectedly (already logged), with a short
+    /// message for the view to show as a warning toast.</summary>
+    public event Action<string>? ActionFailed;
 
     partial void OnGameIdChanged(int value)
     {
@@ -302,7 +312,7 @@ public partial class GameScoringViewModel : ObservableObject
         // so the game id alone (plus the resume flag) is enough.
         if (!_resume && (!_homeIdsSet || !_awayIdsSet)) return;
         _loaded = true;
-        _ = LoadGameAsync(GameId);
+        LoadGameAsync(GameId).LogFailures("Load game");
     }
 
     private async Task LoadGameAsync(int id)
@@ -335,6 +345,8 @@ public partial class GameScoringViewModel : ObservableObject
 
         var existing = await _statEventRepository.GetByGameIdAsync(id);
         bool anySubEvents = existing.Any(e => e.StatType == StatType.SubIn || e.StatType == StatType.SubOut);
+        DiagnosticsLog.Info($"Scoring game {id} ({HomeTeamAbbr} vs {AwayTeamAbbr}): " +
+            $"{(anySubEvents ? "resumed" : "new")}, {existing.Count} events");
 
         // On-court five: reconstruct from substitution history when resuming a game
         // that has already been entered; otherwise use the lineup chosen at setup.
@@ -568,7 +580,7 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Player selection ──
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task SelectPlayer(Player player)
     {
         // In substitution mode a tap arms/completes a swap instead of selecting to score (US-35).
@@ -605,10 +617,16 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Confirm shot ──
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task ConfirmShotAsync(ShotConfirmation confirmation)
     {
-        if (PendingShot is null || SelectedPlayer is null) return;
+        // Capture the shooter and spot, and clear the pending shot, BEFORE saving: while the save
+        // is in flight the scorer can already tap the next player or cancel, which changes
+        // SelectedPlayer/PendingShot underneath us. (Reading them after the await crashed the app
+        // or credited the dot to the wrong player.) Clearing first also turns a double-tap on a
+        // confirm button into a no-op instead of a duplicate shot.
+        if (PendingShot is not { } shot || SelectedPlayer is not { } shooter) return;
+        PendingShot = null;
 
         var statType = confirmation.Is3Pt ? StatType.Points3 : StatType.Points2;
         var shotResult = confirmation.IsMade ? ShotResult.Made : ShotResult.Missed;
@@ -618,11 +636,11 @@ public partial class GameScoringViewModel : ObservableObject
         var statEvent = new StatEvent
         {
             GameId = GameId,
-            PlayerId = SelectedPlayer.Id,
+            PlayerId = shooter.Id,
             StatType = statType,
             ShotResult = shotResult,
-            CourtX = PendingShot.X,
-            CourtY = PendingShot.Y,
+            CourtX = shot.X,
+            CourtY = shot.Y,
             Quarter = Quarter,
             GameClock = GameClock,
             Timestamp = DateTime.UtcNow
@@ -634,9 +652,9 @@ public partial class GameScoringViewModel : ObservableObject
         ShotChartDots.Add(new ShotDot
         {
             EventId = statEvent.Id,
-            PlayerId = SelectedPlayer.Id,
-            X = PendingShot.X,
-            Y = PendingShot.Y,
+            PlayerId = shooter.Id,
+            X = shot.X,
+            Y = shot.Y,
             IsMade = confirmation.IsMade,
             Label = confirmation.Is3Pt ? "3" : "2"
         });
@@ -645,22 +663,22 @@ public partial class GameScoringViewModel : ObservableObject
         {
             if (isHome) HomeScore += pts; else AwayScore += pts;
             RegisterScore(isHome, pts);
-            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Made", isHome, statEvent.Id);
-            SetFollowUp("assist", statEvent.Id);
+            AddLog($"#{shooter.JerseyNumber} {shooter.Name} — {pts}PT Made", isHome, statEvent.Id);
+            SetFollowUp("assist", statEvent.Id, shooter, isHome);
         }
         else
         {
-            AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {pts}PT Miss", isHome, statEvent.Id);
-            SetFollowUp("rebound", statEvent.Id, isHome);
+            AddLog($"#{shooter.JerseyNumber} {shooter.Name} — {pts}PT Miss", isHome, statEvent.Id);
+            SetFollowUp("rebound", statEvent.Id, shooter, isHome);
         }
-
-        PendingShot = null;
     }
 
     // ── Follow-up (assist/rebound) ──
-    // shooterIsHome is only meaningful for a "rebound" follow-up: it records which team missed,
-    // so the rebound can be classified offensive (same team) vs defensive (opponent).
-    private void SetFollowUp(string type, int linkedEventId, bool shooterIsHome = false)
+    // actor is the player whose action triggers the prompt (scorer, fouler, stealer). It's passed
+    // in rather than read from SelectedPlayer, which may have changed while the event was saving.
+    // For a "rebound" actorIsHome also records which team missed, so the rebound can be
+    // classified offensive (same team) vs defensive (opponent).
+    private void SetFollowUp(string type, int linkedEventId, Player actor, bool actorIsHome)
     {
         HomeFollowUpCandidates.Clear();
         AwayFollowUpCandidates.Clear();
@@ -671,12 +689,12 @@ public partial class GameScoringViewModel : ObservableObject
         if (type == "assist")
         {
             // Teammates on court (the scorer's team only), excluding the scorer.
-            var teammates = IsHomeSelected ? HomeOnCourt : AwayOnCourt;
-            var target = IsHomeSelected ? HomeFollowUpCandidates : AwayFollowUpCandidates;
-            var color = IsHomeSelected ? homeColor : awayColor;
+            var teammates = actorIsHome ? HomeOnCourt : AwayOnCourt;
+            var target = actorIsHome ? HomeFollowUpCandidates : AwayFollowUpCandidates;
+            var color = actorIsHome ? homeColor : awayColor;
             foreach (var p in teammates)
             {
-                if (p.Id != SelectedPlayer?.Id)
+                if (p.Id != actor.Id)
                     target.Add(new FollowUpCandidate(p, color));
             }
         }
@@ -684,7 +702,7 @@ public partial class GameScoringViewModel : ObservableObject
         {
             // The OPPOSING on-court team: who was fouled (US-22 foul→FT) / who turned it
             // over (US-22 steal→turnover).
-            bool opponentIsHome = !IsHomeSelected;
+            bool opponentIsHome = !actorIsHome;
             var opponents = opponentIsHome ? HomeOnCourt : AwayOnCourt;
             var target = opponentIsHome ? HomeFollowUpCandidates : AwayFollowUpCandidates;
             var color = opponentIsHome ? homeColor : awayColor;
@@ -712,7 +730,7 @@ public partial class GameScoringViewModel : ObservableObject
             return;
         }
 
-        FollowUp = new FollowUpState(type, linkedEventId, shooterIsHome);
+        FollowUp = new FollowUpState(type, linkedEventId, actorIsHome);
     }
 
     private void ClearFollowUp()
@@ -725,7 +743,7 @@ public partial class GameScoringViewModel : ObservableObject
         ShowFollowUpDivider = false;
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task HandleFollowUpAsync(Player? player)
     {
         if (FollowUp is null) return;
@@ -802,7 +820,7 @@ public partial class GameScoringViewModel : ObservableObject
 
     /// <summary>Records one free throw for the fouled player, linked to the foul. Each attempt
     /// is its own event, so undo walks the sequence back one at a time (US-22).</summary>
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task FtSequenceShotAsync(bool made)
     {
         if (FtSequence is null) return;
@@ -846,16 +864,17 @@ public partial class GameScoringViewModel : ObservableObject
     /// are intentionally excluded — they get a court marker dot instead.</summary>
     public event Action<string>? ActionRecorded;
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task RecordFreeThrowAsync(bool made)
     {
-        if (SelectedPlayer is null) return;
+        // Captured before the save — the selection can change while it's in flight.
+        if (SelectedPlayer is not { } player) return;
         bool isHome = IsHomeSelected;
 
         var ev = new StatEvent
         {
             GameId = GameId,
-            PlayerId = SelectedPlayer.Id,
+            PlayerId = player.Id,
             StatType = StatType.FreeThrow,
             ShotResult = made ? ShotResult.Made : ShotResult.Missed,
             Quarter = Quarter,
@@ -870,14 +889,15 @@ public partial class GameScoringViewModel : ObservableObject
             RegisterScore(isHome, 1);
         }
 
-        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — FT {(made ? "Made" : "Miss")}", isHome, ev.Id);
+        AddLog($"#{player.JerseyNumber} {player.Name} — FT {(made ? "Made" : "Miss")}", isHome, ev.Id);
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task RecordStatAsync(string statId)
     {
-        if (SelectedPlayer is null) return;
+        // Captured before the save — the selection can change while it's in flight.
+        if (SelectedPlayer is not { } player) return;
         bool isHome = IsHomeSelected;
 
         (StatType Type, string Label)? mapped = statId switch
@@ -904,7 +924,7 @@ public partial class GameScoringViewModel : ObservableObject
         var ev = new StatEvent
         {
             GameId = GameId,
-            PlayerId = SelectedPlayer.Id,
+            PlayerId = player.Id,
             StatType = statType,
             Quarter = Quarter,
             GameClock = GameClock,
@@ -912,23 +932,23 @@ public partial class GameScoringViewModel : ObservableObject
         };
         await _statEventRepository.AddAsync(ev);
 
-        AddLog($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} — {label}", isHome, ev.Id);
+        AddLog($"#{player.JerseyNumber} {player.Name} — {label}", isHome, ev.Id);
 
         if (statId is "pf" or "tech")
         {
             await RecomputeFoulsAsync();
             // Personal fouls flow into an optional "fouled who? → free throws" sequence (US-22).
-            if (statId == "pf") SetFollowUp("foul", ev.Id);
+            if (statId == "pf") SetFollowUp("foul", ev.Id, player, isHome);
             // Nudge a substitution the moment a player fouls out (FIBA: 5 personal/technical).
-            if (SelectedPlayer is not null && PlayerFouls.GetValueOrDefault(SelectedPlayer.Id) >= 5)
-                ActionRecorded?.Invoke($"#{SelectedPlayer.JerseyNumber} {SelectedPlayer.Name} fouled out — substitute");
+            if (PlayerFouls.GetValueOrDefault(player.Id) >= 5)
+                ActionRecorded?.Invoke($"#{player.JerseyNumber} {player.Name} fouled out — substitute");
             else
                 ActionRecorded?.Invoke(DescribeEvent(ev));
             return;
         }
 
         // A steal flows into an optional "turnover by?" prompt for the opponent (US-22).
-        if (statId == "stl") SetFollowUp("steal", ev.Id);
+        if (statId == "stl") SetFollowUp("steal", ev.Id, player, isHome);
 
         ActionRecorded?.Invoke(DescribeEvent(ev));
     }
@@ -938,7 +958,7 @@ public partial class GameScoringViewModel : ObservableObject
     /// (or "Nothing to undo"). The view surfaces this as a toast.</summary>
     public event Action<string>? ActionUndone;
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task UndoAsync()
     {
         var events = await _statEventRepository.GetByGameIdAsync(GameId);
@@ -972,6 +992,7 @@ public partial class GameScoringViewModel : ObservableObject
         ClearFollowUp();
         PendingShot = null;
 
+        DiagnosticsLog.Info($"{PeriodLabel} {GameClock} Undo: {description}");
         ActionUndone?.Invoke($"Undid: {description}");
     }
 
@@ -1037,7 +1058,7 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── In-match corrections (US-5) ──
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task ToggleCorrectionsAsync()
     {
         IsCorrectionsOpen = !IsCorrectionsOpen;
@@ -1053,7 +1074,7 @@ public partial class GameScoringViewModel : ObservableObject
     [RelayCommand]
     private void CloseCorrections() => IsCorrectionsOpen = false;
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task DeleteEventAsync(CorrectionEntry? entry)
     {
         if (entry is null) return;
@@ -1079,7 +1100,7 @@ public partial class GameScoringViewModel : ObservableObject
     /// <summary>US-28: flip a shot's made/miss from the play-by-play list. Reverses the old
     /// score/dot, updates the result, re-applies, and drops the now-invalid linked follow-up
     /// (an assist off what's now a miss, or a rebound off what's now a make).</summary>
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task ToggleShotResultAsync(CorrectionEntry? entry)
     {
         if (entry is null) return;
@@ -1131,7 +1152,7 @@ public partial class GameScoringViewModel : ObservableObject
         await RefreshCorrectionsAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task AddFoulAsync(Player? player)
     {
         if (player is null) return;
@@ -1150,7 +1171,7 @@ public partial class GameScoringViewModel : ObservableObject
         await RefreshCorrectionsAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task RemoveFoulAsync(Player? player)
     {
         if (player is null) return;
@@ -1212,7 +1233,7 @@ public partial class GameScoringViewModel : ObservableObject
     }
 
     // ── Quarter management ──
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task NextQuarter()
     {
         // US-41: advancing can't be undone, so confirm first — a stray tap on Q+ mid-period
@@ -1229,8 +1250,9 @@ public partial class GameScoringViewModel : ObservableObject
         StopClock();
         _clockSeconds = PeriodLengthSeconds(Quarter);
         GameClock = FormatClock(_clockSeconds);
-        _ = RecomputeFoulsAsync(); // team fouls reset for the new period (US-20)
-        _ = SaveStateAsync();
+        DiagnosticsLog.Info($"Started {PeriodLabel}");
+        RecomputeFoulsAsync().LogFailures("Recompute fouls"); // team fouls reset for the new period (US-20)
+        SaveStateAsync().LogFailures("Save game state");
     }
 
     // ── Resume / finish (US-10) ──
@@ -1245,7 +1267,7 @@ public partial class GameScoringViewModel : ObservableObject
         await _gameRepository.UpdateGameStateAsync(GameId, _status, _clockSeconds, Quarter);
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task FinishGameAsync()
     {
         bool confirm = await Shell.Current.DisplayAlertAsync(
@@ -1265,7 +1287,7 @@ public partial class GameScoringViewModel : ObservableObject
     /// so the game still shows as Resume in the matches list. Distinct from Finish,
     /// which marks the game complete. Needed because the scoring page hides the nav bar,
     /// so there is otherwise no way off the screen except ending the game.</summary>
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task LeaveGameAsync()
     {
         StopClock();                  // saved paused — never keeps ticking while away
@@ -1281,9 +1303,10 @@ public partial class GameScoringViewModel : ObservableObject
         {
             // Capture the exact remaining time the moment the scorer pauses.
             StopClock();
-            _ = SaveStateAsync();
+            SaveStateAsync().LogFailures("Save game state");
         }
         else StartClock();
+        DiagnosticsLog.Info($"{PeriodLabel} {GameClock} Clock {(IsClockRunning ? "started" : "stopped")}");
     }
 
     private void StartClock()
@@ -1313,7 +1336,7 @@ public partial class GameScoringViewModel : ObservableObject
             // Period expired while running — persist so a resume shows 0:00, not the
             // last saved value (matches a manual pause).
             StopClock();
-            _ = SaveStateAsync();
+            SaveStateAsync().LogFailures("Save game state");
         }
     }
 
@@ -1387,7 +1410,7 @@ public partial class GameScoringViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task SubstituteAsync(SubstitutionRequest sub)
     {
         var onCourt = sub.IsHome ? HomeOnCourt : AwayOnCourt;
@@ -1439,6 +1462,8 @@ public partial class GameScoringViewModel : ObservableObject
     // ── Helpers ──
     private void AddLog(string message, bool isHome, int? eventId = null)
     {
+        DiagnosticsLog.Info($"{PeriodLabel} {GameClock} {message.Trim()}");
+
         PlayLog.Insert(0, new PlayLogEntry
         {
             Message = message,

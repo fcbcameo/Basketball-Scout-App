@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using BasketballScout.App.Diagnostics;
 
 namespace BasketballScout.App;
 
@@ -18,7 +19,9 @@ public partial class App : Application
 
 		try
 		{
-			return new Window(new AppShell());
+			var window = new Window(new AppShell());
+			DiagnosticsLog.TrackLifecycle(window); // was a freeze preceded by the iPad locking?
+			return window;
 		}
 		catch (Exception ex)
 		{
