@@ -73,8 +73,22 @@
             <Border Padding="12" BackgroundColor="#0e0e0e" StrokeShape="RoundRectangle 10"
                     Stroke="#1a1a1a">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="MATCHES" FontSize="10" FontAttributes="Bold"
-                           TextColor="#555" CharacterSpacing="2" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="MATCHES" FontSize="10" FontAttributes="Bold"
+                               TextColor="#555" CharacterSpacing="2" VerticalOptions="Center" />
+                        <!-- US-44: repair one match that was scored as two games -->
+                        <Button Grid.Column="1"
+                                Text="⇄ COMBINE"
+                                IsVisible="{Binding CanCombineGames}"
+                                FontSize="10"
+                                FontAttributes="Bold"
+                                BackgroundColor="#1a2336"
+                                TextColor="#60a5fa"
+                                CornerRadius="4"
+                                Padding="10,4"
+                                HeightRequest="28"
+                                Command="{Binding CombineGamesCommand}" />
+                    </Grid>
 
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Games}" Spacing="4">
                         <BindableLayout.EmptyView>

@@ -37,19 +37,26 @@ public partial class SeasonStatsViewModel : ObservableObject
 
     private readonly PdfReportService _pdfService;
     private readonly ImportExportService _importExportService;
+    private readonly GameMergeService _mergeService;
+
+    /// <summary>Two or more matches listed — only then can a split match be combined (US-44).</summary>
+    [ObservableProperty]
+    public partial bool CanCombineGames { get; set; }
 
     public SeasonStatsViewModel(
         GameStatsService statsService,
         ITeamRepository teamRepository,
         IGameRepository gameRepository,
         PdfReportService pdfService,
-        ImportExportService importExportService)
+        ImportExportService importExportService,
+        GameMergeService mergeService)
     {
         _statsService = statsService;
         _teamRepository = teamRepository;
         _gameRepository = gameRepository;
         _pdfService = pdfService;
         _importExportService = importExportService;
+        _mergeService = mergeService;
     }
 
     partial void OnSeasonIdChanged(int value)
@@ -139,7 +146,13 @@ public partial class SeasonStatsViewModel : ObservableObject
                 HasBadge = badge.Length > 0
             });
         }
+
+        CanCombineGames = CombinableGames().Count >= 2;
     }
+
+    /// <summary>Every listed match (in progress or finished), regardless of the team filter.</summary>
+    private List<SeasonGameSummary> CombinableGames() =>
+        _allGames.Where(g => g.IsPlayed || (g.Status == GameStatus.InProgress && g.HasEvents)).ToList();
 
     private bool _isLoading;
 
@@ -210,6 +223,89 @@ public partial class SeasonStatsViewModel : ObservableObject
 
         await _gameRepository.DeleteAsync(game.GameId);
         await ReloadAsync();
+    }
+
+    /// <summary>US-44: combine one match that was scored as two games (e.g. finished by mistake
+    /// at half time and continued in a new game). The scorer picks the game with the start of the
+    /// match, then the one with the rest, then from which quarter the second takes over; a
+    /// summary with both parts' scores is confirmed before anything changes.</summary>
+    [RelayCommand]
+    private async Task CombineGamesAsync()
+    {
+        try
+        {
+            var games = CombinableGames();
+            var firstPick = await PickGameAsync("Which match has the START of the game (Q1)?", games);
+            if (firstPick is null) return;
+
+            var partners = games.Where(g => g.GameId != firstPick.GameId
+                && g.HomeTeamId == firstPick.HomeTeamId && g.AwayTeamId == firstPick.AwayTeamId).ToList();
+            if (partners.Count == 0)
+            {
+                await Shell.Current.DisplayAlertAsync("Combine Matches",
+                    $"There's no other match of {firstPick.HomeTeamAbbr} (home) vs {firstPick.AwayTeamAbbr} (away) to combine it with.",
+                    "OK");
+                return;
+            }
+            var secondPick = await PickGameAsync("Which match has the REST of the game?", partners);
+            if (secondPick is null) return;
+
+            var options = await _mergeService.GetSplitOptionsAsync(firstPick.GameId, secondPick.GameId);
+            if (options.Count == 0) return;
+            string? splitChoice = await Shell.Current.DisplayActionSheetAsync(
+                "Which quarters come from which match?", "Cancel", null,
+                options.Select(o => o.Label).ToArray());
+            var split = options.FirstOrDefault(o => o.Label == splitChoice);
+            if (split is null) return;
+
+            var preview = await _mergeService.PreviewAsync(firstPick.GameId, secondPick.GameId, split.Period);
+            if (preview.Problem is { } problem)
+            {
+                await Shell.Current.DisplayAlertAsync("Can't Combine", problem, "OK");
+                return;
+            }
+
+            string home = firstPick.HomeTeamAbbr, away = firstPick.AwayTeamAbbr;
+            int dropped = preview.DroppedFromFirst + preview.DroppedFromSecond;
+            string droppedNote = dropped == 0 ? string.Empty
+                : $"⚠ {dropped} stat(s) outside these quarters will be removed " +
+                  $"({preview.DroppedFromFirst} from {preview.SplitLabel} on in the first match, " +
+                  $"{preview.DroppedFromSecond} before {preview.SplitLabel} in the second).\n\n";
+            bool confirm = await Shell.Current.DisplayAlertAsync(
+                "Combine Matches?",
+                $"{preview.FirstPartLabel} from the first match:  {home} {preview.FirstHomeScore} — {preview.FirstAwayScore} {away}\n" +
+                $"{preview.SplitLabel} on from the second match:  {home} {preview.SecondHomeScore} — {preview.SecondAwayScore} {away}\n\n" +
+                $"Combined:  {home} {preview.HomeScore} — {preview.AwayScore} {away}" +
+                (preview.SecondIsFinished ? string.Empty : " (still in progress)") + "\n\n" +
+                droppedNote +
+                $"This becomes one match on {firstPick.GameDate:MMM d, yyyy}; the second match is removed. This can't be undone.",
+                "Combine", "Cancel");
+            if (!confirm) return;
+
+            await _mergeService.MergeAsync(firstPick.GameId, secondPick.GameId, split.Period);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlertAsync("Combine Failed", ex.Message, "OK");
+        }
+    }
+
+    /// <summary>Lets the scorer pick one of <paramref name="games"/> from an action sheet.</summary>
+    private static async Task<SeasonGameSummary?> PickGameAsync(string title, IReadOnlyList<SeasonGameSummary> games)
+    {
+        // Action sheet answers are the button texts, so each label must be unique.
+        var byLabel = new Dictionary<string, SeasonGameSummary>();
+        foreach (var g in games)
+        {
+            string label = $"{g.GameDate:MMM d} · {g.HomeTeamAbbr} {g.HomeScore} — {g.AwayScore} {g.AwayTeamAbbr}" +
+                (g.Status == GameStatus.InProgress ? " · in progress" : string.Empty);
+            if (byLabel.ContainsKey(label)) label += $" · #{g.GameId}";
+            byLabel[label] = g;
+        }
+
+        string? choice = await Shell.Current.DisplayActionSheetAsync(title, "Cancel", null, byLabel.Keys.ToArray());
+        return choice is not null && byLabel.TryGetValue(choice, out var picked) ? picked : null;
     }
 
     /// <summary>US-14: import a single-game JSON bundle into THIS season (the one being

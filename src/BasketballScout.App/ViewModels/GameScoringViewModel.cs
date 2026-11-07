@@ -33,10 +33,15 @@ public partial class GameScoringViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PeriodLabel))]
+    [NotifyPropertyChangedFor(nameof(CanFinishGame))]
     public partial int Quarter { get; set; } = 1;
 
     /// <summary>"Q1".."Qn" for regulation, then "OT1", "OT2", … — n is this game's format.</summary>
     public string PeriodLabel => _format.PeriodLabel(Quarter);
+
+    /// <summary>US-45: a game can only be finished in its last regulation period or overtime, so
+    /// a stray END at half time can't close the game (the END button is dimmed until then).</summary>
+    public bool CanFinishGame => Quarter >= _format.RegulationPeriods;
 
     // Team fouls are per PERIOD (they reset each quarter/OT) and derived from events, so
     // undo/corrections/resume stay correct. See RecomputeFouls (US-20).
@@ -338,6 +343,7 @@ public partial class GameScoringViewModel : ObservableObject
         // This game's period structure (US-21). Set before Quarter so PeriodLabel is right.
         _format = GameFormat.FromGame(game);
         OnPropertyChanged(nameof(PeriodLabel));
+        OnPropertyChanged(nameof(CanFinishGame));
 
         // Load players
         _allHomePlayers = (await _playerRepository.GetByTeamIdAsync(game.HomeTeamId)).ToList();
@@ -1270,6 +1276,17 @@ public partial class GameScoringViewModel : ObservableObject
     [RelayCommand(FlowExceptionsToTaskScheduler = true)]
     private async Task FinishGameAsync()
     {
+        if (!CanFinishGame)
+        {
+            string last = _format.PeriodLabel(_format.RegulationPeriods);
+            await Shell.Current.DisplayAlertAsync(
+                "Not Yet",
+                $"A game can only be finished in {last} or overtime — this is {PeriodLabel}.\n\n" +
+                $"Use Q+ to move to the next quarter, or ← LEAVE to stop scoring for now (the game stays resumable).",
+                "OK");
+            return;
+        }
+
         bool confirm = await Shell.Current.DisplayAlertAsync(
             "Finish Game",
             $"End this game and mark it complete?\n\n{HomeTeamAbbr} {HomeScore} — {AwayScore} {AwayTeamAbbr}",

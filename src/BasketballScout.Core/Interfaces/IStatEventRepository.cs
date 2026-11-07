@@ -23,4 +23,15 @@ public interface IStatEventRepository
 
     /// <summary>Moves every event of one player to another (merging a duplicate).</summary>
     Task ReassignPlayerAsync(int fromPlayerId, int toPlayerId);
+
+    // ── Combining a match split over two games (US-44) ──
+
+    /// <summary>Clears <c>LinkedEventId</c> on every event that points at one of these events.</summary>
+    Task UnlinkEventsLinkedToAsync(IReadOnlyCollection<int> eventIds);
+
+    /// <summary>Deletes these events.</summary>
+    Task DeleteByIdsAsync(IReadOnlyCollection<int> eventIds);
+
+    /// <summary>Moves these events to another game.</summary>
+    Task MoveToGameAsync(IReadOnlyCollection<int> eventIds, int toGameId);
 }
