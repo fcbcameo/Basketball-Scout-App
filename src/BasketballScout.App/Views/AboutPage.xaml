@@ -86,6 +86,23 @@
                      BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
                      Margin="0,12" />
 
+            <!-- Diagnostics: the on-device log of errors, freezes and the scoring timeline -->
+            <Label Text="Troubleshooting"
+                   FontSize="16"
+                   FontAttributes="Bold" />
+            <Button Text="Share diagnostic log"
+                    Clicked="OnShareDiagnosticsClicked"
+                    BackgroundColor="#e85d26"
+                    TextColor="White"
+                    HorizontalOptions="Start" />
+            <Label Text="If the app froze or closed during a game, send this log to the developer. It stays on this device unless you share it."
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light=#666, Dark=#999}" />
+
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light=#e0e0e0, Dark=#333}"
+                     Margin="0,12" />
+
             <Label Text="© Michiel Cornelissis"
                    FontSize="12"
                    TextColor="{AppThemeBinding Light=#888, Dark=#777}"

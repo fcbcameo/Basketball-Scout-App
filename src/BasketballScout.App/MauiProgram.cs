@@ -1,3 +1,4 @@
+using BasketballScout.App.Diagnostics;
 using BasketballScout.Core.Interfaces;
 using BasketballScout.Data;
 using BasketballScout.Data.Repositories;
@@ -17,6 +18,9 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
+        // First, so even a startup failure is recorded.
+        DiagnosticsLog.Install();
+
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
@@ -92,6 +96,7 @@ public static class MauiProgram
         catch (Exception ex)
         {
             StartupError = ex;
+            DiagnosticsLog.Error("Database startup", ex);
         }
 
         return app;
