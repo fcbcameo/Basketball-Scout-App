@@ -1,7 +1,10 @@
 namespace BasketballScout.Services;
 
 /// <summary>Standard shot-chart zones. Coordinates are normalized 0–1 with the basket at the
-/// bottom-centre (x≈0.5, y≈0.9), matching how the scoring screen records CourtX/CourtY.</summary>
+/// bottom-centre (x≈0.5, y≈0.9), matching how the scoring screen records CourtX/CourtY.
+/// Left/Right are from the <b>shooter's</b> perspective (facing the basket). With the basket at the
+/// bottom of the scoring screen the shooter faces down, so their left is the screen's <b>right</b>
+/// (high x). In the PDF (basket at the top, court rotated 180°) left is also left on the page.</summary>
 public enum CourtZone
 {
     Paint,
@@ -46,21 +49,22 @@ public static class CourtZones
         double xp = x * 100.0;
         double yp = y * 100.0;
 
+        // Shooter's perspective (see CourtZone): low x = screen left = the shooter's RIGHT side.
         if (IsThreePointer(xp, yp))
         {
             // Corners: hugging the baseline (near the basket end) at the far sides.
-            if (yp > 72 && xp < 20) return CourtZone.Corner3Left;
-            if (yp > 72 && xp > 80) return CourtZone.Corner3Right;
+            if (yp > 72 && xp < 20) return CourtZone.Corner3Right;
+            if (yp > 72 && xp > 80) return CourtZone.Corner3Left;
             // Top of the key: central and further out.
             if (xp >= 38 && xp <= 62) return CourtZone.Top3;
             // Otherwise a wing three.
-            return xp < 50 ? CourtZone.Wing3Left : CourtZone.Wing3Right;
+            return xp < 50 ? CourtZone.Wing3Right : CourtZone.Wing3Left;
         }
 
         // Two-pointers. Paint = central column near the basket.
         if (xp >= 33 && xp <= 67 && yp >= 60) return CourtZone.Paint;
-        if (xp < 40) return CourtZone.MidLeft;
-        if (xp > 60) return CourtZone.MidRight;
+        if (xp < 40) return CourtZone.MidRight;
+        if (xp > 60) return CourtZone.MidLeft;
         return CourtZone.MidCentre;
     }
 

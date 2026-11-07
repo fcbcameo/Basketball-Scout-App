@@ -4,8 +4,9 @@ namespace BasketballScout.App.Views;
 /// Draws a FIBA-accurate basketball half-court with dark theme matching the V3 mockup.
 /// Dark background with subtle golden-brown court lines.
 ///
-/// Proportions (must match <c>PdfReportService.DrawCourt</c> so shot markers
-/// saved as (CourtX, CourtY) appear in the same visual location on both app and PDF):
+/// Proportions (must match <c>PdfReportService.DrawCourt</c> so shot markers saved as
+/// (CourtX, CourtY) land on the same spot of the court in both; the PDF draws the court
+/// rotated 180°, basket at the top, and rotates the markers with it):
 ///   - 15m wide × 14m deep half-court
 ///   - Paint 4.9m × 5.8m
 ///   - Free-throw circle radius 1.8m
