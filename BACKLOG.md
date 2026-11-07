@@ -796,6 +796,34 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 
 ---
 
+## US-44 — Combine a match that was scored as two games 🔗
+**Priority:** High · **Size:** M · **Type:** Feature (data repair)
+
+**As a** scorer, **I want** to combine two games into one match, **so that** a match I ended by mistake at half time and continued in a new game (Q+ straight to Q3) still gives one correct box score, PDF and season stats.
+
+**Acceptance criteria**
+- **⇄ COMBINE** in the season's MATCHES header (shown once 2+ matches are listed) asks, in order: the match with the **start** (Q1), the match with the **rest** (only matches with the same home and away teams are offered), and **from which quarter** the second takes over. The quarter the second game first recorded stats in is offered first (Q3 in the half-time case).
+- A confirmation shows each part's score and the combined score, warns if stats outside the chosen quarters would be removed, and says it can't be undone.
+- Result: one match with the first game's date, holding the first game's periods before the split and the second game's from the split on. The second game is removed. The combined match takes the second game's status, period and clock, so an unfinished second game stays resumable.
+- Minutes and +/- stay correct across the split. The second game's starting lineup (recorded at Q1 10:00) becomes a substitution at the start of the split quarter. Players on court at the end of the first part who didn't start the second part go off at 0:00.
+- Refused with a clear message for different teams or a different game format. Atomic: a failure changes nothing.
+
+**Technical notes**
+`GameMergeService` (Services) + three set-based `IStatEventRepository` methods (`UnlinkEventsLinkedToAsync`, `DeleteByIdsAsync`, `MoveToGameAsync`), all in one `IUnitOfWork` transaction. Lineups at the split are replayed from each game's SubIn/SubOut. Only players whose status changes get a handover event, so a player on court in both parts keeps one unbroken interval. Match rosters are unioned.
+
+---
+
+## US-45 — Only allow finishing a game in the last quarter 🛑
+**Priority:** High · **Size:** S · **Type:** Guard
+
+**As a** scorer, **I want** END to work only in the last regulation quarter or overtime, **so that** I can't close a game by mistake at half time (which is what made US-44 necessary).
+
+**Acceptance criteria**
+- Before Q4 (the game format's last regulation period), **✓ END** is dimmed. Tapping it explains why and points to Q+ / ← LEAVE, and finishes nothing.
+- From Q4 (and in overtime) END works as before, with its own confirmation.
+
+---
+
 ## Status
 
 - ✅ **US-1** — Fix PDF generation on iOS (PR #21, merged).
@@ -842,6 +870,8 @@ Add a per-period minutes helper in `GameStatsService` (e.g. `ComputePeriodSecond
 - 📋 **US-41** — Confirm before advancing to the next quarter (planned).
 - 📋 **US-42** — Player availability per match (present/absent) (planned).
 - 📋 **US-43** — Permanently delete or merge a player (type-to-confirm) (planned).
+- ✅ **US-44** — Combine a match that was scored as two games (merged).
+- ✅ **US-45** — Only allow finishing a game in the last quarter (merged).
 
 ## Suggested implementation order (remaining)
 

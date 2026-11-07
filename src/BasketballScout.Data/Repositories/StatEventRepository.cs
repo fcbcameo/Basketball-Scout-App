@@ -96,6 +96,28 @@ public class StatEventRepository : IStatEventRepository
             .ExecuteUpdateAsync(s => s.SetProperty(e => e.PlayerId, toPlayerId));
     }
 
+    public async Task UnlinkEventsLinkedToAsync(IReadOnlyCollection<int> eventIds)
+    {
+        await using var lease = _ctx.Lease();
+        await lease.Db.StatEvents
+            .Where(e => e.LinkedEventId != null && eventIds.Contains(e.LinkedEventId.Value))
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.LinkedEventId, (int?)null));
+    }
+
+    public async Task DeleteByIdsAsync(IReadOnlyCollection<int> eventIds)
+    {
+        await using var lease = _ctx.Lease();
+        await lease.Db.StatEvents.Where(e => eventIds.Contains(e.Id)).ExecuteDeleteAsync();
+    }
+
+    public async Task MoveToGameAsync(IReadOnlyCollection<int> eventIds, int toGameId)
+    {
+        await using var lease = _ctx.Lease();
+        await lease.Db.StatEvents
+            .Where(e => eventIds.Contains(e.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.GameId, toGameId));
+    }
+
     public async Task<StatEvent?> GetLastByGameIdAsync(int gameId)
     {
         await using var lease = _ctx.Lease();
